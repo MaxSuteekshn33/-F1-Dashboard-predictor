@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from . import db, racestate as rs
 from .config import MODEL_DIR
-from .prerace import scores, normalise, wilson
+from .prerace import scores, normalise, wilson, model_path
 
 warnings.filterwarnings("ignore")
 FEATS = ["position", "gap_s", "interval_s", "laps_remaining", "frac_done", "tyre_age", "c_soft", "c_medium", "c_hard",
@@ -226,7 +226,7 @@ def load():
     if not row:
         return None
     if _bundle.get("version") != row[0]["version"]:
-        _bundle.clear(); _bundle.update(joblib.load(row[0]["path"]))
+        _bundle.clear(); _bundle.update(joblib.load(model_path(row[0]["path"])))
     return _bundle
 
 

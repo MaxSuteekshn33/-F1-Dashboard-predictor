@@ -10,6 +10,13 @@ delivers data): **what is happening**, **what is likely to happen next**, and **
 
 ```bash
 make install          # Python venv + npm packages
+make api              # starts from the committed snapshot — no bootstrap needed (terminal 1)
+make web              # http://localhost:3000  (terminal 2)
+```
+
+To rebuild the data and models from the sources instead of using the snapshot:
+
+```bash
 make bootstrap        # load history, backfill races, train models (~35 min, see below)
 make api              # http://localhost:8000  (terminal 1)
 make web              # http://localhost:3000  (terminal 2)
@@ -32,14 +39,31 @@ Vercel runs the Next.js front end. It cannot run the API: the Python models, the
 WebSocket loop need a long-running server, so the API is deployed separately (a Render blueprint is in
 `render.yaml`; any Docker host works).
 
-1. **API** — on Render choose *New → Blueprint* and pick this repository. The first start loads the data
-   and trains the models in the background (about 35 minutes; `GET /api/health` shows progress). Note the
-   service URL, e.g. `https://apex-f1-backend.onrender.com`.
+The repository carries a **prebuilt snapshot** in `backend/seed/` (compressed database + trained models,
+about 12 MB). On a fresh host the API unpacks it at start-up, so there is no 35-minute bootstrap and no
+training. `backend/seed/SEED_INFO.txt` says what the snapshot contains.
+
+1. **API** — on Render choose *New → Blueprint* and pick this repository (free plan). Note the service
+   URL, e.g. `https://apex-f1-backend.onrender.com`. `GET /api/health` should report
+   `"started_from_snapshot": true`.
 2. **Front end** — on Vercel choose *Add New → Project*, import the repository and set
-   **Root Directory** to `frontend`. Add two environment
-   variables, then deploy:
+   **Root Directory** to `frontend`. Add two environment variables, then deploy:
    - `BACKEND_URL` = the API URL from step 1
    - `NEXT_PUBLIC_WS_URL` = the same host with `wss://` and `/ws/live`, e.g. `wss://apex-f1-backend.onrender.com/ws/live`
+
+What the free plan means:
+
+- **Memory**: started from the snapshot, the API used 300–350 MB locally across all modules, 20 races and
+  4 × 5,000-run simulations. Render's free plan allows 512 MB. This was measured on a development machine,
+  not on Render.
+- **No persistence**: free services have no disk and sleep when idle. Every wake-up restores the snapshot,
+  so anything fetched since (new sessions, telemetry laps, forecast snapshots) is lost, and the first
+  request after a sleep is slow.
+- **The data is frozen at the snapshot.** New races appear only after someone runs `make bootstrap` (or
+  `make retrain`) on a machine with ~2 GB RAM, then `python -m app.seed export`, and commits the result.
+  Retraining does not fit on the free plan; leave `APEX_BOOTSTRAP` and `APEX_AUTO_RETRAIN` unset there.
+- For an always-fresh deployment use a paid instance with a disk: set `plan: standard`, add a disk mounted
+  at `/srv/data`, and set `APEX_SEED=0` and `APEX_BOOTSTRAP=1`.
 
 The hosted setup has not been deployed or tested from this repository.
 
@@ -53,6 +77,7 @@ The hosted setup has not been deployed or tested from this repository.
 | `LIVE_POLL_SECONDS` / `IDLE_POLL_SECONDS` | 8 / 300 | live-loop cadence |
 | `OPENF1_MIN_INTERVAL` etc. | 2.1 s | per-provider request spacing |
 | `MC_SIMS` | 1000 | Monte Carlo runs per scenario |
+| `APEX_SEED` | 1 | restore `backend/seed/` on first start when no database exists (SQLite only) |
 | `APEX_BOOTSTRAP` | 0 | 1 = build the database and models on first start (`quick` = latest race only) |
 | `APEX_AUTO_RETRAIN` | 0 | 1 = refresh data and retrain on start-up when new races exist |
 | `BACKEND_URL`, `NEXT_PUBLIC_WS_URL` | localhost:8000 | front end → API proxy and WebSocket |
@@ -155,5 +180,5 @@ active one only if its backtest log loss is not more than 3% worse. Versions and
 backend/app/   config, db, cache, connectors/, ingest, racestate, strategy, sim, weather,
                     prerace, inrace, service, live, retrain, bootstrap, main (FastAPI)
 backend/tests/ offline unit tests           frontend/  Next.js app (app/, components/, lib/)
-data/          database, downloads, models (git-ignored, rebuilt by bootstrap)
+data/          database, downloads, models (git-ignored; restored from backend/seed/ or rebuilt by bootstrap)
 ```

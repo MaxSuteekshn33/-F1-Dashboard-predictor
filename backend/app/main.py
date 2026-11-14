@@ -58,7 +58,8 @@ def default_key() -> int:
 @app.get("/api/health")
 def health():
     """Liveness probe for hosting platforms; also reports first-time setup progress."""
-    return {"ok": True, "bootstrap": bootstrap.state}
+    from .config import SEEDED
+    return {"ok": True, "bootstrap": bootstrap.state, "started_from_snapshot": SEEDED}
 
 
 @app.get("/api/status")

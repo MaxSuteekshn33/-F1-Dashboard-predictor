@@ -50,7 +50,7 @@ def put(key: str, value, ttl: float) -> None:
         _mem[key] = (time.time() + ttl, value)
 
 
-def cached(ttl: float):
+def cached(ttl: float, maxsize: int = 300):
     """Decorator caching a function on its positional/keyword args (in-memory objects allowed)."""
     def deco(fn):
         store: dict = {}
@@ -60,7 +60,7 @@ def cached(ttl: float):
             if hit and hit[0] > time.time():
                 return hit[1]
             val = fn(*a, **k)
-            if len(store) > 300:
+            if len(store) >= maxsize:    # bounded: cached frames must not accumulate on small hosts
                 store.clear()
             store[key] = (time.time() + ttl, val)
             return val

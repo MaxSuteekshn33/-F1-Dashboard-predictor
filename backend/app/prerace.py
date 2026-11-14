@@ -344,6 +344,13 @@ def train(variant: str, tune: bool = False, first_train_year: int = 1996, first_
     return metrics
 
 
+def model_path(stored: str):
+    """Registry paths may come from another machine (seed snapshot): fall back to the file name in MODEL_DIR."""
+    from pathlib import Path
+    p = Path(stored)
+    return p if p.is_absolute() and p.exists() else MODEL_DIR / p.name
+
+
 _bundles: dict = {}
 
 
@@ -352,7 +359,7 @@ def load(variant: str) -> dict | None:
     if not row:
         return None
     if _bundles.get(variant, {}).get("version") != row[0]["version"]:
-        _bundles[variant] = joblib.load(row[0]["path"])
+        _bundles[variant] = joblib.load(model_path(row[0]["path"]))
     return _bundles[variant]
 
 

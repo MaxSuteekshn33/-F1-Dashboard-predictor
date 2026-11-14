@@ -1,0 +1,3 @@
+Prebuilt snapshot created 2026-11-14.
+F1DB results through 2026 round 20; 90 OpenF1 races (2023-2026); models trained on that data.
+Rebuild with: python -m app.bootstrap, then python -m app.seed export

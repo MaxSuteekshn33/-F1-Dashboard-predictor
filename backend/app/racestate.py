@@ -33,7 +33,7 @@ def f1db_race(sess: dict) -> dict | None:
     return best[1] if best else None
 
 
-@cached(ttl=8)
+@cached(ttl=8, maxsize=4)
 def load(session_key: int) -> dict:
     """All stored datasets for a session + derived lap end times and per-lap track status."""
     sess = session_row(session_key)

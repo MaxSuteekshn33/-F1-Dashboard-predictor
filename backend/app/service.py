@@ -1002,7 +1002,8 @@ def sources() -> dict:
                 if n: missing.append(f"{n} stored race(s) have no {label}.")
     missing += ["Lap-by-lap timing, tyres and weather exist only from 2023 (OpenF1); earlier seasons have results-level data (F1DB).",
                 "No source provides track-surface wetness, tyre temperatures/pressures, fuel load or team radio."]
-    return {"sources": out, "errors": errs, "missing": missing, "cache_backend": cache.BACKEND, "database": db.engine.url.get_backend_name(), "now": now}
+    from . import seed
+    return {"snapshot": seed.info(), "sources": out, "errors": errs, "missing": missing, "cache_backend": cache.BACKEND, "database": db.engine.url.get_backend_name(), "now": now}
 
 
 def models() -> dict:

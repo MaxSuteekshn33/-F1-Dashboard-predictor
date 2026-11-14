@@ -13,6 +13,10 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'apex.db'}")
 REDIS_URL = os.getenv("REDIS_URL", "")
 
+# First start on a fresh host: restore the committed snapshot (database + trained models) if there is one.
+from .seed import apply as _apply_seed  # noqa: E402
+SEEDED = _apply_seed(DATA_DIR, DATABASE_URL)
+
 OPENF1_BASE = os.getenv("OPENF1_BASE", "https://api.openf1.org/v1")
 # Optional paid OpenF1 account -> real-time access during sessions.
 OPENF1_USERNAME = os.getenv("OPENF1_USERNAME", "")

@@ -1,4 +1,4 @@
-.PHONY: install bootstrap quick api web test retrain
+.PHONY: install bootstrap quick api web test retrain seed
 install:
 	cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 	cd frontend && npm install
@@ -15,3 +15,5 @@ test:
 	cd frontend && npm run typecheck
 retrain:        ## refresh data; retrain only if new races arrived; keep old model if the new one validates worse
 	cd backend && .venv/bin/python -m app.retrain
+seed:           ## refresh the committed snapshot in backend/seed/ from the current database and models
+	cd backend && .venv/bin/python -m app.seed export

@@ -129,7 +129,7 @@ def measured_pit_loss(d: dict, T: float) -> tuple[float | None, int]:
     return (float(np.median(vals)), len(vals)) if len(vals) >= 3 else (None, len(vals))
 
 
-@cached(ttl=3600)
+@cached(ttl=3600, maxsize=40)
 def circuit_prior(circuit_key: int, before: float) -> dict:
     """Historical estimate: tyre model + pit loss fitted on up to two earlier races at this circuit."""
     prior = dict(GENERIC, label="generic assumption")
@@ -165,7 +165,7 @@ def tyre_model(session_key: int, lap: int | None = None) -> dict:
     return _tyre_model_cached(session_key, st["lap"], round(st["T"] or 0, 0))
 
 
-@cached(ttl=120)
+@cached(ttl=120, maxsize=12)
 def _tyre_model_cached(session_key: int, lap: int, T: float) -> dict:
     d = rs.load(session_key)
     prior = circuit_prior(d["session"]["circuit_key"], d["session"]["date_start"])
