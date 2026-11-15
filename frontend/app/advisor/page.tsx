@@ -3,26 +3,47 @@ import { useApi, useRace } from "@/lib/api";
 import { Confidence, Notes, Panel, State, Tag, pct, signed } from "@/components/ui";
 
 const TYPE: Record<string, string> = { WEATHER: "#3d8bf2", "SAFETY CAR": "#e0a100", "PIT WINDOW": "#2fbf71", "TRACK POSITION": "#2fbf71", UNDERCUT: "#c084fc", "DEFEND UNDERCUT": "#c084fc", STRATEGY: "#f2f3f5", "TYRE LIFE": "#ff5a52", DATA: "#a3a8b3" };
+const ORDER: Record<string, number> = { "SAFETY CAR": 0, WEATHER: 1, "PIT WINDOW": 2, "TRACK POSITION": 2, UNDERCUT: 3, "DEFEND UNDERCUT": 3, STRATEGY: 4, "TYRE LIFE": 5, DATA: 6 };
 const tagOf = (s: string) => (s.split(" · ")[0] || "").trim();
+
+function Pending({ label }: { label: string }) {
+  return (
+    <div className="glass rounded-2xl px-5 py-4" role="status" aria-label={label}>
+      <div className="mb-3 text-[11.5px] text-dim">{label}</div>
+      <div className="space-y-2.5"><div className="skeleton h-4 w-2/5" /><div className="skeleton h-4 w-full" /><div className="skeleton h-4 w-3/4" /></div>
+    </div>
+  );
+}
 
 export default function Advisor() {
   const r = useRace();
-  const { data: d, loading, error } = useApi<any>(r.sessionKey && r.driver ? `/api/advisor?${r.q}&driver=${r.driver}` : null, r.tick);
-  if (!d) return <State loading={loading} error={error} />;
-  const ex = d.win_explanation;
-  const max = ex ? Math.max(...ex.factors.map((x: any) => Math.abs(x.shap)), 0.01) : 1;
+  // Three independent requests, lightest first, so each card appears as soon as its own analysis is done.
+  const base = r.sessionKey && r.driver ? `/api/advisor?${r.q}&driver=${r.driver}` : null;
+  const ex = useApi<any>(base && `${base}&parts=explain`, r.tick);
+  const wx = useApi<any>(base && `${base}&parts=weather`, r.tick);
+  const st = useApi<any>(base && `${base}&parts=strategy`, r.tick);
+  const any = ex.data || wx.data || st.data;
+  const note = any?.note;
+  const recs = [...(wx.data?.recommendations || []), ...(st.data?.recommendations || [])].sort((a, b) => (ORDER[a.type] ?? 9) - (ORDER[b.type] ?? 9));
+  const settled = (x: any) => x.data || x.error;
+  const allDone = settled(wx) && settled(st);
+  const busy = ex.loading || wx.loading || st.loading;
+  const explain = ex.data?.win_explanation;
+  const max = explain ? Math.max(...explain.factors.map((x: any) => Math.abs(x.shap)), 0.01) : 1;
+  const omitted = [...(wx.data?.omitted || []), ...(st.data?.omitted || [])];
+  if (!any && !ex.error && !wx.error && !st.error) return <State loading />;
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-xl font-semibold">Race engineer brief — {d.focus_code ?? "—"}</h1>
-        <span className="text-xs text-dim">lap {d.lap} of {d.total_laps}</span>{loading && <span className="animate-pulse text-xs text-faint">recalculating…</span>}
+        <h1 className="text-xl font-semibold tracking-tight">Race engineer brief — {any?.focus_code ?? "—"}</h1>
+        {any && <span className="text-xs text-dim">lap {any.lap} of {any.total_laps}</span>}
+        {busy && any && <span className="inline-flex items-center gap-1.5 text-xs text-faint"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#b79cf0]" />updating</span>}
       </div>
-      {d.note && <State empty={d.note} />}
+      {note && <State empty={note} />}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
         <div className="space-y-3">
-          {d.recommendations.length === 0 && !d.note && <State empty="No actionable situation detected at this lap for this driver." />}
-          {d.recommendations.map((x: any, i: number) => (
-            <article key={i} className="glass overflow-hidden rounded-2xl">
+          {recs.map((x: any, i: number) => (
+            <article key={`${x.type}-${i}`} className="glass page-in overflow-hidden rounded-2xl">
               <header className="flex flex-wrap items-center gap-3 px-5 pb-1 pt-4">
                 <span className="rounded-full border px-2 py-[2px] text-[9px] font-bold tracking-[.14em]" style={{ borderColor: TYPE[x.type] || "#6b717d", color: TYPE[x.type] || "#a3a8b3" }}>{x.type}</span>
                 <h2 className="text-sm font-semibold">{x.title}</h2><span className="ml-auto"><Confidence c={x.confidence} /></span>
@@ -43,18 +64,23 @@ export default function Advisor() {
               </div>
             </article>
           ))}
+          {!note && !wx.data && !wx.error && <Pending label="Checking the weather and tyre-class timing…" />}
+          {!note && !st.data && !st.error && <Pending label="Running strategy simulations (the slowest part)…" />}
+          {wx.error && <State error={`Weather analysis: ${wx.error}`} />}
+          {st.error && <State error={`Strategy analysis: ${st.error}`} />}
+          {allDone && !note && recs.length === 0 && !wx.error && !st.error && <State empty="No actionable situation detected at this lap for this driver." />}
         </div>
         <div className="space-y-5">
-          <Panel title={`Why this win probability — ${d.focus_code ?? ""}`} tags={["MODEL"]} note={ex?.note}>
-            {ex ? (<>
-              <div className="num mb-2 text-2xl font-semibold">{pct(ex.p_win_ml)}<span className="ml-2 text-xs font-normal text-faint">in-race model</span></div>
-              <div className="space-y-1.5">{ex.factors.map((f: any, i: number) => (
+          <Panel title={`Why this win probability — ${any?.focus_code ?? ""}`} tags={["MODEL"]} note={explain?.note}>
+            {explain ? (<>
+              <div className="num mb-3 text-2xl font-semibold">{pct(explain.p_win_ml)}<span className="ml-2 text-xs font-normal text-faint">in-race model</span></div>
+              <div className="space-y-2">{explain.factors.map((f: any, i: number) => (
                 <div key={i} className="text-[11.5px]"><div className="flex justify-between text-dim"><span>{f.label}{f.value !== null && <span className="num text-faint"> = {f.value}</span>}</span><span className="num">{signed(f.shap, 2)}</span></div>
-                  <div className="relative mt-0.5 h-1.5 rounded-sm bg-white/[0.08]"><div className="absolute top-0 h-1.5 rounded-sm" style={{ left: f.shap >= 0 ? "50%" : `${50 - (Math.abs(f.shap) / max) * 50}%`, width: `${(Math.abs(f.shap) / max) * 50}%`, background: f.shap >= 0 ? "#3987e5" : "#d95926" }} /></div></div>))}</div>
-              <div className="mt-2 text-[10.5px] text-faint">Blue pushes the probability up, orange down.</div>
-            </>) : <State empty="Explanation available while a race is in progress and the in-race model is trained." />}
+                  <div className="relative mt-1 h-1.5 rounded-full bg-white/[0.08]"><div className="absolute top-0 h-1.5 rounded-full" style={{ left: f.shap >= 0 ? "50%" : `${50 - (Math.abs(f.shap) / max) * 50}%`, width: `${(Math.abs(f.shap) / max) * 50}%`, background: f.shap >= 0 ? "#3987e5" : "#d95926" }} /></div></div>))}</div>
+              <div className="mt-3 text-[10.5px] text-faint">Blue pushes the probability up, orange down.</div>
+            </>) : <State loading={!ex.data && !ex.error} error={ex.error} empty={ex.data ? "Shown while a race is in progress and the in-race model is trained." : null} />}
           </Panel>
-          <Notes title="Guardrails" items={[d.guardrails, ...(d.omitted || []), "This assistant is rule-based over the platform's own calculations; it does not use a language model and cannot answer free-text questions."]} />
+          <Notes title="Guardrails" items={[any?.guardrails, ...omitted, "This assistant is rule-based over the platform's own calculations; it does not use a language model and cannot answer free-text questions."]} />
         </div>
       </div>
     </div>

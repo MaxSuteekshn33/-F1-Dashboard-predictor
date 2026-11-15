@@ -6,9 +6,20 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 const WS = process.env.NEXT_PUBLIC_WS_URL || "";
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || (WS ? WS.replace(/^ws/, "http").replace(/\/ws\/live\/?$/, "") : "");
 
-export async function api<T = any>(path: string, body?: unknown): Promise<T> {
-  const r = await fetch(API_BASE + path, body === undefined ? { cache: "no-store" } :
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+export async function api<T = any>(path: string, body?: unknown, attempt = 0): Promise<T> {
+  let r: Response;
+  try {
+    r = await fetch(API_BASE + path, body === undefined ? { cache: "no-store" } :
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) {
+    // dropped connection (e.g. the API host waking up or restarting): retry twice before giving up
+    if (attempt < 2) { await new Promise((ok) => setTimeout(ok, 2500 * (attempt + 1))); return api<T>(path, body, attempt + 1); }
+    throw new Error("The API did not respond. It may be waking up — try again in a moment.");
+  }
+  if ((r.status === 502 || r.status === 503 || r.status === 504) && attempt < 2 && body === undefined) {
+    await new Promise((ok) => setTimeout(ok, 2500 * (attempt + 1)));
+    return api<T>(path, body, attempt + 1);
+  }
   if (!r.ok) {
     let msg = `${r.status}`;
     try { msg = (await r.json()).detail || msg; } catch {}

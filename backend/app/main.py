@@ -189,8 +189,8 @@ def analytics(year: int | None = None):
 
 
 @app.get("/api/advisor")
-def advisor(session_key: int | None = None, lap: int | None = None, driver: int | None = None):
-    return guard(sv.advisor, session_key or default_key(), lap, driver)
+def advisor(session_key: int | None = None, lap: int | None = None, driver: int | None = None, parts: str = "weather,strategy,explain"):
+    return guard(sv.advisor, session_key or default_key(), lap, driver, parts)
 
 
 @app.get("/api/health/sources")
