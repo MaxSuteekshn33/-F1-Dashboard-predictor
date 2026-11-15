@@ -28,20 +28,31 @@ export async function api<T = any>(path: string, body?: unknown, attempt = 0): P
   return r.json();
 }
 
-/** GET with loading/error state. Pass null to skip. Keeps the previous data visible while refetching. */
+/** GET with loading/error state. Pass null to skip. Keeps the previous data visible while refetching.
+ *  Refreshes are coalesced: if a refresh is asked for while the same request is still running, exactly one
+ *  more runs when it finishes — so fast updates (a live race, a rehearsal) never pile up on a slow API. */
 export function useApi<T = any>(path: string | null, tick: number = 0) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const seq = useRef(0);
+  const flight = useRef<{ path: string | null; dirty: boolean }>({ path: null, dirty: false });
   const [n, setN] = useState(0);
   useEffect(() => {
     if (!path) return;
+    if (flight.current.path === path) { flight.current.dirty = true; return; }     // same request in flight: remember, don't stack
     const id = ++seq.current;
+    flight.current = { path, dirty: false };
     setLoading(true);
     api<T>(path).then((d) => { if (id === seq.current) { setData(d); setError(null); } })
       .catch((e) => { if (id === seq.current) setError(String(e.message || e)); })
-      .finally(() => { if (id === seq.current) setLoading(false); });
+      .finally(() => {
+        if (id !== seq.current) return;
+        const again = flight.current.dirty;
+        flight.current = { path: null, dirty: false };
+        setLoading(false);
+        if (again) setN((x) => x + 1);
+      });
   }, [path, tick, n]);
   return { data, error, loading, reload: useCallback(() => setN((x) => x + 1), []) };
 }

@@ -7,7 +7,7 @@ from __future__ import annotations
 import time
 import numpy as np
 import pandas as pd
-from . import db
+from . import db, clock
 from .cache import cached
 from .config import LIVE_FRESHNESS_SECONDS
 
@@ -51,6 +51,11 @@ def load(session_key: int) -> dict:
         pit_in = laps.groupby("driver_number")["is_pit_out_lap"].shift(-1).fillna(0)
         laps["is_pit_in_lap"] = pit_in.astype(int)
     d["laps"] = laps
+    stamps = [float(laps.end.max())] if len(laps) and laps.end.notna().any() else []
+    for t in ("position", "weather", "race_control", "pit"):
+        if len(d[t]) and d[t]["date"].notna().any():
+            stamps.append(float(d[t]["date"].max()))
+    d["newest_any"] = max(stamps) if stamps else None   # a lap only "ends" when the next begins, so laps alone lag by a lap
     d["f1db"] = f1db_race(sess)
     # leader timeline: time at which lap n was first completed
     lead = laps.dropna(subset=["end"]).groupby("lap_number")["end"].min() if len(laps) else pd.Series(dtype=float)
@@ -119,17 +124,27 @@ def state(session_key: int, lap: int | None = None) -> dict:
     d = load(session_key)
     sess, laps, lead = d["session"], d["laps"], d["lead_end"]
     newest = float(laps.end.max()) if len(laps) and laps.end.notna().any() else None
-    md = mode(sess, newest)
-    if not d["max_lap"]:
-        return {"session": sess, "mode": md, "lap": 0, "max_lap": 0, "total_laps": d["total_laps"], "rows": [],
-                "track_status": "UNKNOWN", "weather": None, "T": None, "limitations": ["No lap data stored for this session yet."]}
-    live_edge = lap is None or lap >= d["max_lap"]
-    lap = d["max_lap"] if live_edge else max(1, int(lap))
+    md = mode(sess, d.get("newest_any") or newest)
+    vt = clock.virtual_now(session_key)
+    visible = d["max_lap"]          # the newest lap anyone may look at
+    if vt is not None:              # rehearsal: a stored race replayed through the live path — nothing after `vt` is visible
+        info = clock.info() or {}
+        md = {"mode": "REHEARSAL", "data_age_s": None, "speed": info.get("speed"),
+              "reason": f"Rehearsal — a simulated live feed replaying stored data from {info.get('label', 'a past race')} at "
+                        f"{info.get('speed', 1):g}× speed. This is not a live race."}
+        visible = int(lead.index[lead <= vt].max()) if (lead <= vt).any() else 0
+    if not visible:
+        return {"session": sess, "mode": md, "lap": 0, "max_lap": 0, "total_laps": d["total_laps"], "rows": [], "events": [],
+                "neutralisations": {"SC": 0, "VSC": 0, "RED": 0}, "fastest_lap": None, "est_remaining_s": None, "f1db": d["f1db"], "as_of": vt, "source": "OpenF1",
+                "track_status": "UNKNOWN", "weather": None, "T": None,
+                "limitations": ["Waiting for the first completed lap." if vt is not None else "No lap data stored for this session yet."]}
+    live_edge = lap is None or lap >= visible
+    lap = visible if live_edge else max(1, int(lap))
     known_laps = lead.index[lead.index <= lap]      # some sessions miss a lap in the provider data
     lap = int(known_laps.max()) if len(known_laps) else int(lead.index.min())
     T = float(lead.loc[lap])
-    if live_edge:  # newest stored record (or now, when the feed is live)
-        T = time.time() if md["mode"] == "LIVE" else max(T, newest or T)
+    if live_edge:  # the present moment: now when the feed is live, the rehearsal clock, else the newest stored record
+        T = vt if vt is not None else (time.time() if md["mode"] == "LIVE" else max(T, newest or T))
     known = laps[laps.end <= T + 1e-6]
     drivers = d["drivers"].set_index("driver_number").to_dict("index") if len(d["drivers"]) else {}
     stints, pits, res = d["stints"], d["pit"], d["session_result"]
@@ -216,8 +231,8 @@ def state(session_key: int, lap: int | None = None) -> dict:
     if not len(w): lim.append("No track weather records for this session.")
     if not d["f1db"]: lim.append("Race not matched in F1DB; scheduled race distance unknown.")
     return {
-        "session": sess, "f1db": d["f1db"], "mode": md, "lap": lap, "max_lap": d["max_lap"], "total_laps": d["total_laps"],
-        "T": T, "rows": ordered, "track_status": ts,
+        "session": sess, "f1db": d["f1db"], "mode": md, "lap": lap, "max_lap": visible, "total_laps": d["total_laps"],
+        "T": T, "rows": ordered, "track_status": ts, "events": _events(d, T),
         "neutralisations": {"SC": sum(1 for t, s in d["status_events"] if s == "SC" and t <= T),
                             "VSC": sum(1 for t, s in d["status_events"] if s == "VSC" and t <= T),
                             "RED": sum(1 for t, s in d["status_events"] if s == "RED" and t <= T)},
@@ -227,6 +242,16 @@ def state(session_key: int, lap: int | None = None) -> dict:
         "est_remaining_s": round(float(remaining * lead_recent), 0) if remaining is not None and lead_recent and not pd.isna(lead_recent) else None,
         "limitations": lim, "source": "OpenF1", "as_of": T,
     }
+
+
+def _events(d: dict, T: float, n: int = 8) -> list[dict]:
+    """Most recent race-control messages up to T (blue flags left out) — observed provider data."""
+    rc = d["race_control"]
+    if not len(rc):
+        return []
+    k = rc[(rc.date <= T) & ~((rc.category == "Flag") & (rc.flag == "BLUE"))].sort_values("date").tail(n)
+    return [{"t": float(r.date), "lap": None if pd.isna(r.lap_number) else int(r.lap_number), "category": r.category, "flag": r.flag,
+             "message": r.message} for r in k.itertuples()][::-1]
 
 
 def _f(v):

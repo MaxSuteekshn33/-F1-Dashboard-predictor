@@ -5,12 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { useRace } from "@/lib/api";
 
 const NAV: [string, string, string][] = [
-  ["/next", "Next Race", "Upcoming"], ["/play", "Predictions & Leagues", "Upcoming"],
+  ["/live", "Live Race", "Upcoming"], ["/next", "Next Race", "Upcoming"], ["/play", "Predictions & Leagues", "Upcoming"],
   ["/", "Command Centre", "Race"], ["/telemetry", "Timing & Telemetry", "Race"], ["/predictor", "Race Predictor", "Race"],
   ["/strategy", "Pit & Tyre Strategy", "Decide"], ["/weather", "Weather Intelligence", "Decide"], ["/lab", "Simulation Lab", "Decide"], ["/advisor", "Recommendations", "Decide"],
   ["/history", "Race History", "Explore"], ["/analytics", "Drivers & Teams", "Explore"], ["/data", "Data & Models", "Explore"],
 ];
-const MODE: Record<string, [string, string]> = { LIVE: ["#2fbf71", "Live"], DELAYED: ["#e0a100", "Delayed"], HISTORICAL: ["#9aa1ae", "Historical"] };
+const MODE: Record<string, [string, string]> = { LIVE: ["#2fbf71", "Live"], DELAYED: ["#e0a100", "Delayed"], HISTORICAL: ["#9aa1ae", "Historical"], REHEARSAL: ["#c9a7ff", "Rehearsal · simulated"] };
 const STATUS: Record<string, [string, string]> = {
   GREEN: ["Green flag", "#2fbf71"], SC: ["Safety Car", "#e0a100"], SC_ENDING: ["SC in this lap", "#e0a100"], VSC: ["Virtual SC", "#e0a100"],
   RED: ["Red flag", "#ff5a52"], FINISHED: ["Chequered", "#f2f3f5"], UNKNOWN: ["No data", "#7c8290"],

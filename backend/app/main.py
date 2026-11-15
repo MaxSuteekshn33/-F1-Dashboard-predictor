@@ -2,9 +2,9 @@
 from __future__ import annotations
 import asyncio, os, threading, time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Body
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Body, Header
 from fastapi.middleware.cors import CORSMiddleware
-from . import db, live, racestate as rs, service as sv, weather, retrain, ingest, bootstrap, nextrace
+from . import db, live, racestate as rs, service as sv, weather, retrain, ingest, bootstrap, nextrace, clock
 from .config import CORS_ORIGINS
 
 
@@ -60,8 +60,10 @@ def guard(fn, *a, **k):
 
 
 def default_key() -> int:
+    if clock.active() is not None:
+        return clock.active()
     cur = live.current_session()
-    if cur and cur["session_name"] == "Race":
+    if cur and cur.get("session_type") == "Race":       # Grand Prix or Sprint
         return cur["session_key"]
     k = ingest.latest_race_key() if db.has_table("of1_sessions") else None
     have = rs.race_sessions(1)
@@ -165,6 +167,47 @@ def safetycar(body: dict = Body(...)):
 @app.post("/api/sim/run")
 def sim_run(body: dict = Body(...)):
     return guard(sv.lab, body.get("session_key") or default_key(), body)
+
+
+@app.get("/api/live")
+def live_status():
+    """What 'live' means right now: a real session in progress, a rehearsal, or nothing — plus the next session."""
+    cur, nxt, reh = live.current_session(), live.next_session(), clock.info()
+    out = {"now": time.time(), "current_session": cur, "next_session": nxt, "rehearsal": reh,
+           "openf1_authenticated": bool(os.getenv("OPENF1_USERNAME")), "live_loop": {k: live.state.get(k) for k in ("last_poll", "last_error", "polls")},
+           "rehearsal_needs_code": bool(os.getenv("APEX_ADMIN_TOKEN")), "mode": None, "session_key": None, "lap": None}
+    key = reh["session_key"] if reh else (cur["session_key"] if cur and cur.get("session_type") == "Race" else None)
+    if key is not None:
+        try:
+            st = rs.state(key)
+            out.update(mode=st["mode"], session_key=key, lap=st["lap"], total_laps=st["total_laps"], track_status=st["track_status"])
+        except Exception as e:
+            out["mode"] = {"mode": "DELAYED", "reason": f"Session found but no timing data stored yet ({type(e).__name__})."}; out["session_key"] = key
+    return sv.clean(out)
+
+
+def _admin(code: str | None) -> None:
+    need = os.getenv("APEX_ADMIN_TOKEN")
+    if need and code != need:
+        raise HTTPException(403, "That admin code is not right.")
+
+
+@app.post("/api/live/rehearsal")
+def rehearsal_start(body: dict = Body(default={}), x_admin_code: str | None = Header(default=None)):
+    """Replay a stored race through the live path (a labelled simulation). Everyone viewing the site sees it."""
+    _admin(x_admin_code)
+    try:
+        info = live.start_rehearsal(int(body.get("session_key") or (rs.race_sessions(1)[0]["session_key"])), float(body.get("speed", 10)), int(body.get("start_lap", 1)))
+    except (ValueError, KeyError, IndexError) as e:
+        raise HTTPException(400, str(e))
+    return sv.clean(info)
+
+
+@app.delete("/api/live/rehearsal")
+def rehearsal_stop(x_admin_code: str | None = Header(default=None)):
+    _admin(x_admin_code)
+    clock.stop()
+    return {"stopped": True}
 
 
 @app.get("/api/next")

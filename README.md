@@ -85,6 +85,7 @@ The hosted setup has not been deployed or tested from this repository.
 | `APEX_BOOTSTRAP` | 0 | 1 = build the database and models on first start (`quick` = latest race only) |
 | `APEX_MAX_CONCURRENCY` | 2 | heavy API requests processed at once (1 on small hosts) |
 | `NEXT_PUBLIC_API_URL` | derived from `NEXT_PUBLIC_WS_URL` | front end calls the API directly at this address instead of through `/api` rewrites |
+| `APEX_ADMIN_TOKEN` | unset | when set, starting or stopping a rehearsal needs this code (set it on any public deployment) |
 | `APEX_WARM` | 1 | pre-compute the Next Race prediction and driver pace right after start-up |
 | `APEX_AUTO_RETRAIN` | 0 | 1 = refresh data and retrain on start-up when new races exist |
 | `BACKEND_URL`, `NEXT_PUBLIC_WS_URL` | localhost:8000 | front end → API proxy and WebSocket |
@@ -93,6 +94,7 @@ The hosted setup has not been deployed or tested from this repository.
 
 | # | Section | What it does |
 |---|---|---|
+| 0a | Live Race | Follows a running Grand Prix or Sprint lap by lap: timing, win chances, the current strategy call for a chosen driver, race-control messages. Includes a **rehearsal** that replays a stored race through the same live path at 5–30× speed, always labelled as a simulation |
 | 0 | Next Race | Upcoming Grand Prix: predicted order, forecast, circuit history, and a pre-race strategy lab that starts every car from the grid and compares starting tyres and stop counts under a chosen Safety Car, rain or temperature. All inputs are historical estimates or stated assumptions |
 | 0b | Predictions & Leagues | Sign in, make picks for the next race (podium, fastest lap, Safety Car, winner's stops), score points against the real result, and compare in private invite-only leagues. Points only. Needs a Supabase project: run `supabase/schema.sql` and `supabase/races.sql`, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` on the front end, and (for automatic scoring) the `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` repository secrets |
 | 1 | Race Command Centre | Session header, weather, neutralisations, timing tower (gaps, tyres, stints, pits, positions gained, predicted finish), team/driver/contender filters |
@@ -168,8 +170,9 @@ active one only if its backtest log loss is not more than 3% worse. Versions and
 
 ## Known limits
 
-- **Live data**: the live loop and WebSocket push are implemented but have only been exercised against
-  finished sessions; real-time behaviour during a race needs a paid OpenF1 account and has not been tested.
+- **Live data**: the live path (state at the current moment, a push on every new lap, recalculated predictions and
+  calls) is exercised end to end by the rehearsal mode. Fetching from OpenF1 during a real session, and signing in with
+  a paid OpenF1 account, have not been tested against a live race.
 - **Wetness and tyre-class crossover** are modelled, not measured: the penalty curves and wetting/drying
   rates are stated assumptions. No source provides track-surface wetness.
 - **Safety Car pit-loss factors** (45% / 62% of the green-flag loss), tyre life shares and the pass
