@@ -128,7 +128,7 @@ export default function NextRace() {
           </Panel>
           <div className="grid gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
             <Panel title="Where each plan finishes" tags={["MODEL"]} note="Share of simulated races ending in each position, for the four best plans."><PositionDist options={[...res.options].sort((a: any, b: any) => a.exp_pos - b.exp_pos).slice(0, 4)} /></Panel>
-            <Panel title="Simulated order under these conditions" tags={["MODEL"]} pad={false}>
+            <Panel title={`Simulated order with ${res.focus.code} on the best plan`} tags={["MODEL"]} pad={false}>
               <div className="max-h-[300px] overflow-auto"><table className="grid-t"><thead><tr><th>Driver</th><th className="r">Grid</th><th className="r">Expected finish</th><th className="r">Win</th><th className="r">Podium</th></tr></thead>
                 <tbody>{res.field.map((x: any) => <tr key={x.code}><td><Driver code={x.code} colour={x.team_colour} /></td><td className="r num text-dim">P{x.grid}</td><td className="r num">P{num(x.exp_pos)}</td><td className="r num">{pct(x.p_win)}</td><td className="r num">{pct(x.p_podium)}</td></tr>)}</tbody></table></div>
             </Panel>

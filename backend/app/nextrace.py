@@ -5,6 +5,7 @@ No laps exist before a race, so the simulator starts every car from the grid wit
 from the most recent races — or stated assumptions. Every payload says which is which.
 """
 from __future__ import annotations
+import json
 import time
 import numpy as np
 import pandas as pd
@@ -66,7 +67,7 @@ def _start_epoch(race: dict) -> float:
     return time.mktime(time.strptime(f"{race['date']} {race.get('time') or '13:00'}", "%Y-%m-%d %H:%M")) - time.timezone
 
 
-@cached(ttl=600, maxsize=2)
+@cached(ttl=1800, maxsize=2)
 def overview() -> dict:
     pred = sv.prerace_prediction()
     if not pred.get("available"):
@@ -169,7 +170,23 @@ def _context(body: dict) -> tuple[dict, dict, list[str]]:
     return ctx, {"focus_id": focus_id, "pred": pred}, notes
 
 
+_plan_cache: dict = {}
+_result_cache: dict = {}
+
+
 def simulate(body: dict) -> dict:
+    key = json.dumps(body, sort_keys=True, default=str)
+    hit = _result_cache.get(key)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    out = _simulate(body)
+    if len(_result_cache) > 40:
+        _result_cache.clear()
+    _result_cache[key] = (time.time() + 600, out)
+    return out
+
+
+def _simulate(body: dict) -> dict:
     """Compare starting tyres and stop counts for one driver in the upcoming race, under optional what-ifs:
     {driver_id, grid_position, safety_car:{lap,type,duration}, rain_in_min, rain_intensity, rain_duration_min,
      use_forecast_rain, track_temp_delta, random_incidents, n_sims}."""
@@ -197,27 +214,35 @@ def simulate(body: dict) -> dict:
                      f"{ctx['hz']['dnf_per_race'] * 100:.0f}%/car ({ctx['hz']['source']}).")
     if body.get("track_temp_delta"):
         scn["track_temp_delta"] = float(body["track_temp_delta"]); notes.append(f"ASSUMPTION · track {float(body['track_temp_delta']):+.0f}°C → tyre wear {float(body['track_temp_delta']) * 2:+.0f}%.")
-    # candidate plans: best one- and two-stop for each starting compound (CP-SAT)
-    options = []
-    for c0 in sg.SLICKS:
-        for k in (1, 2):
-            p = sg.optimise(m, 0, total, c0, 0, [c0], k)
-            if p and p["rule_ok"]:
-                seq = "-".join([c0[0]] + [x["compound"][0] for x in p["plan"]])
-                options.append({"label": f"{seq} · {k}-stop", "start": c0, "stops": k, "plan": [(x["lap"], x["compound"]) for x in p["plan"]],
-                                "model_time": p["rel_time"], "scenario": {"overrides": {num: {"compound": c0, "tyre_age": 0}}}})
+    # candidate plans: best one- and two-stop for each starting compound (CP-SAT). They depend only on the
+    # circuit's tyre model, so they are solved once per race and reused for every driver and what-if.
+    pkey = (ctx["race"]["race_id"], total, round(m["pit_loss"], 2), tuple(round(m["compounds"][c]["deg"], 4) for c in sg.SLICKS))
+    if pkey not in _plan_cache:
+        _plan_cache.clear()
+        found = []
+        for c0 in sg.SLICKS:
+            for k in (1, 2):
+                p = sg.optimise(m, 0, total, c0, 0, [c0], k)
+                if p and p["rule_ok"]:
+                    seq = "-".join([c0[0]] + [x["compound"][0] for x in p["plan"]])
+                    found.append({"label": f"{seq} · {k}-stop", "start": c0, "stops": k, "plan": [(x["lap"], x["compound"]) for x in p["plan"]], "model_time": p["rel_time"]})
+        _plan_cache[pkey] = found
+    options = [dict(o, scenario={"overrides": {num: {"compound": o["start"], "tyre_age": 0}}}) for o in _plan_cache[pkey]]
     best_model = min(o["model_time"] for o in options)
-    table = weather.compare(ctx, num, options, scn, n=int(body.get("n_sims", 1000)))
+    n_sims = int(body.get("n_sims", 1000))
+    table = weather.compare(ctx, num, options, scn, n=n_sims, keep_field=True)
     by = {o["label"]: o for o in options}
     for t in table:
         o = by[t["label"]]
         t["start"], t["stops"], t["model_delta"] = o["start"], o["stops"], round(o["model_time"] - best_model, 2)
     best = min(table, key=lambda t: (round(t["exp_pos"], 1), t["time_vs_best"] or 0)) if table else None
-    # projected order for the whole field on everyone's own optimal plan under the same scenario
-    base = sim.run(ctx, None, scn, n=int(body.get("n_sims", 1000)), seed=7, focus=num)
+    # projected order for the whole field: taken from the best plan's own simulation (no extra run)
+    grid_of = {r["driver_number"]: r["grid"] for r in st["rows"]}
     field = sorted([{"code": d["code"], "team_colour": d["team_colour"], "p_win": round(d["p_win"], 4), "p_podium": round(d["p_podium"], 4),
-                     "exp_pos": round(d["exp_pos"], 2), "grid": next(r["grid"] for r in st["rows"] if r["driver_number"] == d["driver_number"])}
-                    for d in base.get("drivers", [])], key=lambda d: d["exp_pos"])
+                     "exp_pos": round(d["exp_pos"], 2), "grid": grid_of.get(d["driver_number"])} for d in (best or {}).get("_field", [])], key=lambda d: d["exp_pos"])
+    base = {"wetness_path": best["wetness_path"] if best else None, "n_sims": best["n_sims"] if best else n_sims}
+    for t in table:
+        t.pop("_field", None)
     return {"race": ctx["race"], "total_laps": total, "focus": {"driver_id": me["driver_id"], "code": me["code"], "grid": me["grid"]},
             "field_start_compound": ctx["start_compound"], "options": table, "best": best["label"] if best else None, "field": field,
             "wetness_path": base.get("wetness_path"), "n_sims": base.get("n_sims"), "notes": notes,

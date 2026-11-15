@@ -81,7 +81,7 @@ def rain_timeline(fc: dict, T: float, R: int, lap_s: float) -> tuple[list[float]
                  "first_rain_min": round((first - T) / 60, 0) if first else None}
 
 
-def compare(ctx: dict, focus: int, options: list[dict], scenario: dict, n: int | None = None) -> list[dict]:
+def compare(ctx: dict, focus: int, options: list[dict], scenario: dict, n: int | None = None, keep_field: bool = False) -> list[dict]:
     """Run the same simulated futures (common random numbers) for each candidate decision of `focus`."""
     base_plans = sim.default_plans(ctx)
     out = []
@@ -102,7 +102,7 @@ def compare(ctx: dict, focus: int, options: list[dict], scenario: dict, n: int |
                     "risk_pos_sd": round(f["risk"], 2), "pos_p10": f["pos_p10"], "pos_p90": f["pos_p90"],
                     "blocked_laps": round(f["blocked_laps"], 1), "pos_hist": [round(x, 4) for x in f["pos_hist"]],
                     "exp_time": f["exp_time"], "_t": f["sims_time"], "_a": f["sims_alive"], "n_sims": r["n_sims"],
-                    "wetness_path": r["wetness_path"], "inputs": r["inputs"]})
+                    "wetness_path": r["wetness_path"], "inputs": r["inputs"], "_field": r["drivers"]})
     if out:
         ok = np.all([o["_a"] for o in out], axis=0)
         means = [float(o["_t"][ok].mean()) if ok.any() else None for o in out]
@@ -114,6 +114,9 @@ def compare(ctx: dict, focus: int, options: list[dict], scenario: dict, n: int |
             o["paired_se"] = round(float((o["_t"][ok] - out[0]["_t"][ok]).std() / math.sqrt(max(1, ok.sum()))), 2) if ok.any() else None
         for o in out:
             o.pop("_t"); o.pop("_a")
+    if not keep_field:
+        for o in out:
+            o.pop("_field", None)
     return out
 
 

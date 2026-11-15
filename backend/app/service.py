@@ -93,7 +93,7 @@ def _race(race_id: int) -> dict:
                 "FROM f1db_races r JOIN f1db_grands_prix g ON g.id=r.grand_prix_id JOIN f1db_circuits c ON c.id=r.circuit_id WHERE r.id=:i", i=race_id)[0]
 
 
-@cached(ttl=600)
+@cached(ttl=1800)
 def prerace_prediction(race_id: int | None = None) -> dict:
     race = _race(race_id) if race_id else _next_race()
     if not race:
