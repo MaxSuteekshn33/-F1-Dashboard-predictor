@@ -49,7 +49,7 @@ class OpenF1(Connector):
     def headers(self) -> dict:
         """Bearer token for a paid OpenF1 account (real-time access). Falls back to anonymous access if sign-in
         fails, and records why, so the dashboard can say so instead of silently showing delayed data."""
-        if not (OPENF1_USERNAME and OPENF1_PASSWORD):
+        if not (OPENF1_USERNAME and OPENF1_PASSWORD) or time.time() < OpenF1._anonymous_until:
             return {}
         if not self._token or time.time() > self._token_exp - 60:
             st = OpenF1.auth_state
@@ -69,6 +69,30 @@ class OpenF1(Connector):
                 st.update(ok=False, error=f"{type(e).__name__}: {str(e)[:200]}", checked=time.time())
                 return {}
         return {"Authorization": f"Bearer {self._token}"}
+
+    _anonymous_until = 0.0
+
+    def on_unauthorized(self) -> bool:
+        """A token was rejected (expired early, revoked). First time: drop it and sign in again. If the fresh
+        token is rejected too, use anonymous access for ten minutes rather than failing every request."""
+        if not OpenF1._token:
+            return False
+        if OpenF1.auth_state.get("retried"):
+            OpenF1._anonymous_until = time.time() + 600
+            OpenF1.auth_state.update(ok=False, error="Token rejected twice by the API; using free access for 10 minutes.", checked=time.time(), retried=False)
+            OpenF1._token = None
+            return True
+        OpenF1._token = None
+        OpenF1.auth_state["retried"] = True
+        return True
+
+    def on_success(self) -> None:
+        OpenF1.auth_state["retried"] = False      # a request went through: the next rejection gets a fresh sign-in again
+
+    def min_interval(self) -> float:
+        # paid accounts: 6 requests/s and 60/min (free: 3/s and 30/min)
+        base = super().min_interval()
+        return min(base, 1.05) if OpenF1.auth_state.get("ok") else base
 
     @property
     def authenticated(self) -> bool:

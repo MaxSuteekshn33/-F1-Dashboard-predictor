@@ -65,8 +65,18 @@ class Connector:
     def headers(self) -> dict:
         return {}
 
+    def min_interval(self) -> float:
+        return MIN_INTERVAL.get(self.name, 0.5)
+
+    def on_unauthorized(self) -> bool:
+        """Called on HTTP 401. Return True to retry the request (e.g. after refreshing a token)."""
+        return False
+
+    def on_success(self) -> None:
+        pass
+
     def _throttle(self):
-        gap = MIN_INTERVAL.get(self.name, 0.5)
+        gap = self.min_interval()
         with _locks[self.name]:
             wait = _last_call.get(self.name, 0) + gap - time.time()
             if wait > 0:
@@ -104,10 +114,14 @@ class Connector:
                         break
                     time.sleep(ra or min(self.max_backoff, 2 * 2 ** attempt))
                     continue
+                if r.status_code == 401 and self.on_unauthorized():
+                    err = "HTTP 401 (token rejected; signing in again)"
+                    continue
                 if r.status_code >= 400:
                     err = f"HTTP {r.status_code}: {r.text[:200]}"
                     break
                 data = r.json()
+                self.on_success()
                 record(self.name, True)
                 if ttl:
                     cache.put(key, data, ttl)
