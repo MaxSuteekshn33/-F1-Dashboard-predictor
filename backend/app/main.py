@@ -47,8 +47,12 @@ app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*
 _slots = threading.BoundedSemaphore(int(os.getenv("APEX_MAX_CONCURRENCY", "2")))
 
 
-def guard(fn, *a, **k):
+def guard(fn, *a, light: bool = False, **k):
+    """Run a service call. Heavy calls (models, simulations) take a slot so memory stays bounded; `light` calls
+    (timing, lap tables, status) skip the queue, so the timing screen stays current while predictions catch up."""
     try:
+        if light:
+            return sv.clean(fn(*a, **k))
         with _slots:
             return sv.clean(fn(*a, **k))
     except KeyError as e:
@@ -100,12 +104,12 @@ def sessions():
 
 @app.get("/api/command")
 def command(session_key: int | None = None, lap: int | None = None):
-    return guard(sv.command, session_key or default_key(), lap)
+    return guard(sv.command, session_key or default_key(), lap, light=True)
 
 
 @app.get("/api/telemetry/laps")
 def tel_laps(session_key: int | None = None, lap: int | None = None):
-    return guard(sv.lap_table, session_key or default_key(), lap)
+    return guard(sv.lap_table, session_key or default_key(), lap, light=True)
 
 
 @app.get("/api/telemetry/compare")
@@ -151,7 +155,7 @@ def weather_scenario(body: dict = Body(...)):
 @app.get("/api/weather/summary")
 def weather_summary(session_key: int | None = None, lap: int | None = None):
     """Forecast headline only (no simulation) — used by the Command Centre tile."""
-    return guard(weather.summary, session_key or default_key(), lap)
+    return guard(weather.summary, session_key or default_key(), lap, light=True)
 
 
 @app.get("/api/weather/next")
