@@ -181,7 +181,7 @@ export default function Play() {
             <div className="flex gap-2"><input type="text" className="min-w-0 flex-1" placeholder="New league name" maxLength={40} value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="New league name" /><button className="btn" disabled={newName.trim().length < 2} onClick={create}>Create</button></div>
             <div className="flex gap-2"><input type="text" className="min-w-0 flex-1 uppercase" placeholder="Invite code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} aria-label="Invite code" /><button className="btn" disabled={code.trim().length < 4} onClick={join}>Join</button></div>
           </div>
-          {lmsg && <div className="mt-3"><State error={lmsg} /></div>}
+          {lmsg && <div role="alert" className="mt-3 rounded-xl border border-bad/30 bg-bad/10 px-4 py-2.5 text-xs text-[#ffb3ae]">{lmsg}</div>}
         </Panel>
       </div>
 
@@ -191,7 +191,7 @@ export default function Play() {
             <div className="overflow-auto"><table className="grid-t"><thead><tr><th>Player</th><th>Winner</th><th>Second</th><th>Third</th><th>Fastest lap</th><th>Safety Car</th><th className="r">Winner&apos;s stops</th><th className="r">Points</th></tr></thead>
               <tbody>
                 {lastLocked.result && <tr className="!bg-good/10"><td className="font-semibold text-good">Result</td><td>{nameOf(lastLocked, lastLocked.result.winner)}</td><td>{nameOf(lastLocked, lastLocked.result.p2)}</td><td>{nameOf(lastLocked, lastLocked.result.p3)}</td><td>{nameOf(lastLocked, lastLocked.result.fastest_lap)}</td><td>{lastLocked.result.safety_car === null ? "—" : lastLocked.result.safety_car ? "Yes" : "No"}</td><td className="r num">{lastLocked.result.winner_stops ?? "—"}</td><td /></tr>}
-                {picks.map((p) => <tr key={p.user_id}><td className="font-semibold">{p.display_name}</td>{p.winner ? <><td>{nameOf(lastLocked, p.winner)}</td><td>{nameOf(lastLocked, p.p2)}</td><td>{nameOf(lastLocked, p.p3)}</td><td>{nameOf(lastLocked, p.fastest_lap)}</td><td>{p.safety_car === null ? "—" : p.safety_car ? "Yes" : "No"}</td><td className="r num">{p.winner_stops ?? "—"}</td></> : <td colSpan={6} className="text-faint">No picks made</td>}<td className="r num font-semibold">{p.points ?? "—"}</td></tr>)}
+                {picks.map((p) => <tr key={p.user_id}><td className="font-semibold">{p.display_name}</td>{p.winner ? <><td>{nameOf(lastLocked, p.winner)}</td><td>{nameOf(lastLocked, p.p2)}</td><td>{nameOf(lastLocked, p.p3)}</td><td>{nameOf(lastLocked, p.fastest_lap)}</td><td>{p.safety_car === null ? "—" : p.safety_car ? "Yes" : "No"}</td><td className="r num">{p.winner_stops ?? "—"}</td></> : <td colSpan={6} className="text-faint">No picks made</td>}<td className="r num font-semibold">{p.winner ? p.points ?? "—" : "—"}</td></tr>)}
               </tbody></table></div>
           </State>
         </Panel>
