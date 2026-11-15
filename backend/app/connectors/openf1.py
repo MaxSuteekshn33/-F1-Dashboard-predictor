@@ -44,16 +44,29 @@ class OpenF1(Connector):
     _token = None
     _token_exp = 0.0
 
+    auth_state: dict = {"configured": bool(OPENF1_USERNAME and OPENF1_PASSWORD), "ok": None, "error": None, "checked": None}
+
     def headers(self) -> dict:
+        """Bearer token for a paid OpenF1 account (real-time access). Falls back to anonymous access if sign-in
+        fails, and records why, so the dashboard can say so instead of silently showing delayed data."""
         if not (OPENF1_USERNAME and OPENF1_PASSWORD):
             return {}
         if not self._token or time.time() > self._token_exp - 60:
+            st = OpenF1.auth_state
+            if st["ok"] is False and st["checked"] and time.time() - st["checked"] < 120:
+                return {}          # failed moments ago: do not hammer the sign-in endpoint on every request
             try:
                 r = self.client.post("https://api.openf1.org/token",
-                                     data={"username": OPENF1_USERNAME, "password": OPENF1_PASSWORD})
+                                     data={"username": OPENF1_USERNAME, "password": OPENF1_PASSWORD},
+                                     headers={"Content-Type": "application/x-www-form-urlencoded"})
+                if r.status_code >= 400:
+                    raise RuntimeError(f"HTTP {r.status_code}: {r.text[:160]}")
                 j = r.json()
                 OpenF1._token, OpenF1._token_exp = j["access_token"], time.time() + float(j.get("expires_in", 3600))
-            except Exception:
+                st.update(ok=True, error=None, checked=time.time())
+            except Exception as e:
+                OpenF1._token = None
+                st.update(ok=False, error=f"{type(e).__name__}: {str(e)[:200]}", checked=time.time())
                 return {}
         return {"Authorization": f"Bearer {self._token}"}
 

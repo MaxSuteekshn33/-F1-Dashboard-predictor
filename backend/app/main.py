@@ -173,7 +173,10 @@ def sim_run(body: dict = Body(...)):
 def live_status():
     """What 'live' means right now: a real session in progress, a rehearsal, or nothing — plus the next session."""
     cur, nxt, reh = live.current_session(), live.next_session(), clock.info()
-    out = {"now": time.time(), "current_session": cur, "next_session": nxt, "rehearsal": reh,
+    from .connectors.openf1 import openf1
+    if openf1.auth_state["configured"] and openf1.auth_state["ok"] is None:
+        openf1.headers()        # first look: try the paid sign-in once so its result can be reported
+    out = {"now": time.time(), "current_session": cur, "next_session": nxt, "rehearsal": reh, "openf1_auth": dict(openf1.auth_state),
            "openf1_authenticated": bool(os.getenv("OPENF1_USERNAME")), "live_loop": {k: live.state.get(k) for k in ("last_poll", "last_error", "polls")},
            "rehearsal_needs_code": bool(os.getenv("APEX_ADMIN_TOKEN")), "mode": None, "session_key": None, "lap": None}
     key = reh["session_key"] if reh else (cur["session_key"] if cur and cur.get("session_type") == "Race" else None)
