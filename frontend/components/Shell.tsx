@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRace } from "@/lib/api";
 
 const NAV: [string, string, string][] = [
+  ["/next", "Next Race", "Upcoming"],
   ["/", "Command Centre", "Race"], ["/telemetry", "Timing & Telemetry", "Race"], ["/predictor", "Race Predictor", "Race"],
   ["/strategy", "Pit & Tyre Strategy", "Decide"], ["/weather", "Weather Intelligence", "Decide"], ["/lab", "Simulation Lab", "Decide"], ["/advisor", "Recommendations", "Decide"],
   ["/history", "Race History", "Explore"], ["/analytics", "Drivers & Teams", "Explore"], ["/data", "Data & Models", "Explore"],
@@ -53,7 +54,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const mode = MODE[cmd?.mode?.mode || "HISTORICAL"];
   const st = STATUS[cmd?.track_status || "UNKNOWN"] || STATUS.UNKNOWN;
   const replaying = r.lap !== null && r.lap < maxLap;
-  const groups = ["Race", "Decide", "Explore"];
+  const groups = ["Upcoming", "Race", "Decide", "Explore"];
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 p-3 lg:block">
@@ -92,6 +93,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <select className="lg:hidden" value={path} onChange={(e) => (location.href = e.target.value)} aria-label="Section">
                 {NAV.map(([h, l]) => <option key={h} value={h}>{l}</option>)}
               </select>
+              {path === "/next" ? (
+                <div className="flex flex-1 flex-wrap items-center gap-3 py-1 text-[12.5px] text-dim">
+                  <span className="font-medium text-ink">Upcoming race</span>
+                  <span>Predictions and a pre-race strategy lab. The race and lap controls return on the other sections.</span>
+                </div>
+              ) : (<>
               <select value={r.sessionKey ?? ""} onChange={(e) => r.setSessionKey(Number(e.target.value))} aria-label="Race" className="max-w-[220px] font-medium">
                 {r.sessions.map((s) => <option key={s.session_key} value={s.session_key}>{s.year} · {s.location}</option>)}
               </select>
@@ -117,6 +124,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 <Pill colour={mode[0]} title={cmd?.mode?.reason}>{mode[1]}</Pill>
                 <Pill colour={st[1]}>{st[0]}</Pill>
               </div>
+                          </>)}
             </div>
             {r.alert && <div className="flex items-center gap-3 rounded-b-2xl border-t border-warn/30 bg-warn/10 px-4 py-2 text-xs text-warn">{r.alert}<button className="btn ml-auto !py-1" onClick={r.clearAlert}>Dismiss</button></div>}
           </div>

@@ -4,7 +4,7 @@ import asyncio, os, threading, time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
-from . import db, live, racestate as rs, service as sv, weather, retrain, ingest, bootstrap
+from . import db, live, racestate as rs, service as sv, weather, retrain, ingest, bootstrap, nextrace
 from .config import CORS_ORIGINS
 
 
@@ -151,6 +151,17 @@ def safetycar(body: dict = Body(...)):
 @app.post("/api/sim/run")
 def sim_run(body: dict = Body(...)):
     return guard(sv.lab, body.get("session_key") or default_key(), body)
+
+
+@app.get("/api/next")
+def next_overview():
+    """Upcoming Grand Prix: prediction, forecast, circuit history and the inputs the pre-race simulator will use."""
+    return guard(nextrace.overview)
+
+
+@app.post("/api/next/simulate")
+def next_simulate(body: dict = Body(default={})):
+    return guard(nextrace.simulate, body)
 
 
 @app.get("/api/history/overview")
