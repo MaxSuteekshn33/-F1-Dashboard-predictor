@@ -1,0 +1,47 @@
+name: Refresh data and models
+# After each race weekend: pull new results and lap data, retrain if a new race arrived, and commit the
+# refreshed snapshot (backend/seed/) so the hosted API starts from current data.
+on:
+  schedule:
+    - cron: "0 6 * * 1"    # Monday 06:00 UTC — the morning after a race
+    - cron: "0 6 * * 3"    # Wednesday 06:00 UTC — catches results published late
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13", cache: pip, cache-dependency-path: backend/requirements.txt }
+      - run: pip install -r requirements.txt
+      - name: Refresh, retrain if needed, re-export the snapshot
+        id: refresh
+        env:
+          APEX_DATA_DIR: ${{ runner.temp }}/apex-data
+          APEX_LIVE: "0"
+        run: python -m app.refresh
+      - name: Tests still pass with the new snapshot
+        if: steps.refresh.outputs.changed == 'true'
+        run: python -m pytest -q tests
+      - name: Commit the refreshed snapshot
+        if: steps.refresh.outputs.changed == 'true'
+        working-directory: .
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/seed
+          git commit -m "Refresh data snapshot: ${{ steps.refresh.outputs.summary }}"
+          git push
+      - name: Ask Render to redeploy (only if a deploy hook is configured)
+        if: steps.refresh.outputs.changed == 'true'
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK" ]; then curl -fsS -X POST "$RENDER_DEPLOY_HOOK" > /dev/null && echo "Render deploy requested"; else echo "No RENDER_DEPLOY_HOOK secret set — deploy the new commit on Render manually."; fi

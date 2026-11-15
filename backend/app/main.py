@@ -18,11 +18,25 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(asyncio.to_thread(bootstrap.run, mode == "quick")))
     if os.getenv("APEX_LIVE", "1") == "1":
         tasks.append(asyncio.create_task(live.loop()))
+    if os.getenv("APEX_WARM", "1") == "1" and not bootstrap.needed():
+        tasks.append(asyncio.create_task(asyncio.to_thread(_warm)))
     if os.getenv("APEX_AUTO_RETRAIN", "0") == "1":
         tasks.append(asyncio.create_task(asyncio.to_thread(retrain.run)))
     yield
     for t in tasks:
         t.cancel()
+
+
+def _warm() -> None:
+    """Pre-compute the slow one-off pieces of the Next Race page right after start-up, so the first visitor
+    does not wait for them (the upcoming-race prediction and each driver's recent race pace)."""
+    try:
+        with _slots:
+            nextrace.overview()
+        with _slots:
+            nextrace.recent_pace()
+    except Exception as e:      # warming is best-effort; requests compute on demand if it fails
+        print(f"[warm] skipped: {type(e).__name__}: {e}", flush=True)
 
 
 app = FastAPI(title="APEX F1 Intelligence", version="1.0.0", lifespan=lifespan)

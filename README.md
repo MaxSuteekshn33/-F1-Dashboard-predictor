@@ -60,9 +60,12 @@ What the free plan means:
 - **No persistence**: free services have no disk and sleep when idle. Every wake-up restores the snapshot,
   so anything fetched since (new sessions, telemetry laps, forecast snapshots) is lost, and the first
   request after a sleep is slow.
-- **The data is frozen at the snapshot.** New races appear only after someone runs `make bootstrap` (or
-  `make retrain`) on a machine with ~2 GB RAM, then `python -m app.seed export`, and commits the result.
-  Retraining does not fit on the free plan; leave `APEX_BOOTSTRAP` and `APEX_AUTO_RETRAIN` unset there.
+- **The data follows the snapshot.** A scheduled GitHub Actions job (`.github/workflows/refresh-data.yml`, Mondays and
+  Wednesdays) pulls new results and lap data, retrains if a new race arrived (keeping the old model if the new one
+  validates worse) and commits the refreshed `backend/seed/`. Add a Render deploy hook URL as the repository secret
+  `RENDER_DEPLOY_HOOK` to have the host redeploy by itself; otherwise deploy the new commit manually. Each refresh adds
+  about 10 MB to the repository history. Retraining does not fit on the free plan itself; leave `APEX_BOOTSTRAP` and
+  `APEX_AUTO_RETRAIN` unset there.
 - For an always-fresh deployment use a paid instance with a disk: set `plan: standard`, add a disk mounted
   at `/srv/data`, and set `APEX_SEED=0` and `APEX_BOOTSTRAP=1`.
 
@@ -82,6 +85,7 @@ The hosted setup has not been deployed or tested from this repository.
 | `APEX_BOOTSTRAP` | 0 | 1 = build the database and models on first start (`quick` = latest race only) |
 | `APEX_MAX_CONCURRENCY` | 2 | heavy API requests processed at once (1 on small hosts) |
 | `NEXT_PUBLIC_API_URL` | derived from `NEXT_PUBLIC_WS_URL` | front end calls the API directly at this address instead of through `/api` rewrites |
+| `APEX_WARM` | 1 | pre-compute the Next Race prediction and driver pace right after start-up |
 | `APEX_AUTO_RETRAIN` | 0 | 1 = refresh data and retrain on start-up when new races exist |
 | `BACKEND_URL`, `NEXT_PUBLIC_WS_URL` | localhost:8000 | front end → API proxy and WebSocket |
 

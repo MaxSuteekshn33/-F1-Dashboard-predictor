@@ -24,7 +24,9 @@ def needed() -> dict:
     last = db.q("SELECT year, round FROM f1db_race_results ORDER BY year DESC, round DESC LIMIT 1")
     latest = f"{last[0]['year']} R{last[0]['round']}" if last else None
     a = _active("pre_race")
-    n_races = db.q("SELECT COUNT(DISTINCT session_key) AS n FROM of1_session_result")[0]["n"] if db.has_table("of1_session_result") else 0
+    # races that actually have lap data (a few sessions are listed by the provider but empty)
+    n_races = db.q("SELECT COUNT(DISTINCT l.session_key) AS n FROM of1_laps l JOIN of1_sessions s ON s.session_key=l.session_key "
+                   "WHERE s.session_name='Race'")[0]["n"] if db.has_table("of1_laps") else 0
     b = _active("in_race")
     trained_on = int(b["train_through"].split("(")[1].split()[0]) if b and "(" in b["train_through"] else 0
     return {"pre_race": a is None or a["train_through"] != latest, "in_race": b is None or n_races > trained_on,
