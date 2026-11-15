@@ -27,6 +27,13 @@ jobs:
           APEX_DATA_DIR: ${{ runner.temp }}/apex-data
           APEX_LIVE: "0"
         run: python -m app.refresh
+      - name: Publish races and results to the prediction game (only if Supabase secrets are configured)
+        env:
+          APEX_DATA_DIR: ${{ runner.temp }}/apex-data
+          APEX_LIVE: "0"
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m app.league_sync
       - name: Tests still pass with the new snapshot
         if: steps.refresh.outputs.changed == 'true'
         run: python -m pytest -q tests

@@ -94,6 +94,7 @@ The hosted setup has not been deployed or tested from this repository.
 | # | Section | What it does |
 |---|---|---|
 | 0 | Next Race | Upcoming Grand Prix: predicted order, forecast, circuit history, and a pre-race strategy lab that starts every car from the grid and compares starting tyres and stop counts under a chosen Safety Car, rain or temperature. All inputs are historical estimates or stated assumptions |
+| 0b | Predictions & Leagues | Sign in, make picks for the next race (podium, fastest lap, Safety Car, winner's stops), score points against the real result, and compare in private invite-only leagues. Points only. Needs a Supabase project: run `supabase/schema.sql` and `supabase/races.sql`, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` on the front end, and (for automatic scoring) the `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` repository secrets |
 | 1 | Race Command Centre | Session header, weather, neutralisations, timing tower (gaps, tyres, stints, pits, positions gained, predicted finish), team/driver/contender filters |
 | 2 | Live Timing & Telemetry | Circuit map with car positions and sectors, two-lap telemetry comparison (speed, throttle, brake, gear, RPM, DRS, time delta), lap and position traces, pace by compound, qualifying vs race, teammates |
 | 3 | AI Race Predictor | In-race win/podium/top-5/expected finish per lap; pre-race winner, podium, top-5, fastest lap, expected points and championship projection; SHAP factors |

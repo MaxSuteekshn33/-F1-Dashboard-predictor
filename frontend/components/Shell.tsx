@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRace } from "@/lib/api";
 
 const NAV: [string, string, string][] = [
-  ["/next", "Next Race", "Upcoming"],
+  ["/next", "Next Race", "Upcoming"], ["/play", "Predictions & Leagues", "Upcoming"],
   ["/", "Command Centre", "Race"], ["/telemetry", "Timing & Telemetry", "Race"], ["/predictor", "Race Predictor", "Race"],
   ["/strategy", "Pit & Tyre Strategy", "Decide"], ["/weather", "Weather Intelligence", "Decide"], ["/lab", "Simulation Lab", "Decide"], ["/advisor", "Recommendations", "Decide"],
   ["/history", "Race History", "Explore"], ["/analytics", "Drivers & Teams", "Explore"], ["/data", "Data & Models", "Explore"],
@@ -93,10 +93,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <select className="lg:hidden" value={path} onChange={(e) => (location.href = e.target.value)} aria-label="Section">
                 {NAV.map(([h, l]) => <option key={h} value={h}>{l}</option>)}
               </select>
-              {path === "/next" ? (
+              {path === "/next" || path === "/play" ? (
                 <div className="flex flex-1 flex-wrap items-center gap-3 py-1 text-[12.5px] text-dim">
-                  <span className="font-medium text-ink">Upcoming race</span>
-                  <span>Predictions and a pre-race strategy lab. The race and lap controls return on the other sections.</span>
+                  <span className="font-medium text-ink">{path === "/play" ? "Prediction game" : "Upcoming race"}</span>
+                  <span>{path === "/play" ? "Make picks, score points, compare with friends. The race and lap controls return on the other sections." : "Predictions and a pre-race strategy lab. The race and lap controls return on the other sections."}</span>
                 </div>
               ) : (<>
               <select value={r.sessionKey ?? ""} onChange={(e) => r.setSessionKey(Number(e.target.value))} aria-label="Race" className="max-w-[220px] font-medium">
