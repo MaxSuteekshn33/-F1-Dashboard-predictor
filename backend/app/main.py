@@ -118,8 +118,8 @@ def predict_inrace(session_key: int | None = None, lap: int | None = None):
 
 
 @app.get("/api/strategy")
-def strategy(session_key: int | None = None, lap: int | None = None, driver: int | None = None):
-    return guard(sv.strategy_view, session_key or default_key(), lap, driver)
+def strategy(session_key: int | None = None, lap: int | None = None, driver: int | None = None, parts: str = "overview,plans"):
+    return guard(sv.strategy_view, session_key or default_key(), lap, driver, parts)
 
 
 @app.get("/api/weather")

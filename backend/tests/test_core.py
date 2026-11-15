@@ -68,3 +68,13 @@ def test_probability_helpers():
     pos = pl_sample(np.log(np.array([0.7, 0.2, 0.1])), 4000, np.random.default_rng(0))
     assert (pos == 1).mean(0)[0] > 0.6 and sorted(pos[0].tolist()) == [1, 2, 3]
     assert ece(np.array([0.1] * 100), np.array([1] * 10 + [0] * 90)) < 1e-9
+
+
+def test_fast_planner_matches_cp_sat_optimum():
+    m = model()
+    for comp, age, used in (("MEDIUM", 10, ["MEDIUM"]), ("SOFT", 4, ["SOFT", "HARD"]), ("HARD", 18, ["HARD"]), (None, 0, ["INTERMEDIATE"])):
+        f = sg.fast_plan(m, 12, 58, comp, age, used)
+        legal = [o for o in (sg.optimise(m, 12, 58, comp, age, used, k) for k in (0, 1, 2, 3)) if o and o["rule_ok"]]
+        best = min(legal, key=lambda o: o["rel_time"])
+        assert abs(f["rel_time"] - best["rel_time"]) < 0.01
+        assert f["stops"] == best["stops"]

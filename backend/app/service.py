@@ -230,8 +230,29 @@ def inrace_prediction(session_key: int, lap: int | None = None) -> dict:
 
 
 # ---------------------------------------------------------------- 6. strategy
-def strategy_view(session_key: int, lap: int | None, driver: int | None) -> dict:
+_strategy_cache: dict = {}
+
+
+def strategy_view(session_key: int, lap: int | None, driver: int | None, parts: str = "overview,plans") -> dict:
+    """`parts`: "overview" (tyre model, pit loss, stints, undercuts, rivals — quick) and/or "plans" (optimised
+    strategies evaluated by Monte Carlo — the slow part). Results are cached per race state."""
     ctx = sim.context(session_key, lap)
+    st, m = ctx["st"], ctx["m"]
+    want = {x.strip() for x in parts.split(",")}
+    if "plans" in want:          # the plans view is a superset; one cache entry then serves the page and the advisor
+        want = {"overview", "plans"}
+    ck = (session_key, st["lap"], round(st["T"] or 0), driver, tuple(sorted(want)))
+    hit = _strategy_cache.get(ck)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    out = _strategy_view(ctx, session_key, driver, want)
+    if len(_strategy_cache) > 60:
+        _strategy_cache.clear()
+    _strategy_cache[ck] = (time.time() + 600, out)
+    return out
+
+
+def _strategy_view(ctx: dict, session_key: int, driver: int | None, want: set) -> dict:
     st, m = ctx["st"], ctx["m"]
     total = st["total_laps"] or st["max_lap"]
     run = [r for r in st["rows"] if r["status"] == "RUNNING"]
@@ -266,6 +287,9 @@ def strategy_view(session_key: int, lap: int | None, driver: int | None) -> dict
                            "tyre_age": r["tyre_age"], "next_stop": plans.get(r["driver_number"], [(None, None)])[0][0] if plans.get(r["driver_number"]) else None,
                            "next_compound": plans.get(r["driver_number"], [(None, None)])[0][1] if plans.get(r["driver_number"]) else None}
                           for r in run]
+    out["parts"] = sorted(want)
+    if "plans" not in want:
+        return out
     on_wet = me["compound"] in sg.WETS
     start_lap = st["lap"]
     if on_wet:

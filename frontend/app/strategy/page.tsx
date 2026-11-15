@@ -20,8 +20,14 @@ function Stints({ stints, total, lap, plan }: { stints: any[]; total: number; la
 export default function Strategy() {
   const r = useRace();
   const [tab, setTab] = useState("plan");
-  const { data: s, loading, error } = useApi<any>(r.sessionKey && r.driver ? `/api/strategy?${r.q}&driver=${r.driver}` : null, r.tick);
-  if (!s) return <State loading={loading} error={error} />;
+  // Two requests: a quick overview (tyres, pit loss, stints, rivals) and the simulated plans, which take longer.
+  const base = r.sessionKey && r.driver ? `/api/strategy?${r.q}&driver=${r.driver}` : null;
+  const ov = useApi<any>(base && `${base}&parts=overview`, r.tick);
+  const pl = useApi<any>(base && `${base}&parts=plans`, r.tick);
+  const fresh = pl.data && (!ov.data || (pl.data.lap === ov.data.lap && pl.data.focus === ov.data.focus));
+  const s = fresh ? pl.data : ov.data;
+  const plansPending = !fresh && !pl.error && !s?.note;
+  if (!s) return <State loading={ov.loading || pl.loading || (!ov.error && !pl.error)} error={ov.error || pl.error} />;
   const tm = s.tyre_model;
   const mine = s.stints.filter((x: any) => x.driver_number === s.focus);
   const rec = s.strategies.find((x: any) => x.recommended);
@@ -33,7 +39,7 @@ export default function Strategy() {
         <Stat label="Focus driver" value={s.focus_code ?? "—"} sub={`lap ${s.lap} of ${s.total_laps}`} />
         <Stat label="Pit loss (green)" value={<>{s.pit_loss.seconds}<span className="text-sm text-faint"> s</span></>} sub={s.pit_loss.source} tag={s.pit_loss.source.startsWith("measured") ? "OBSERVED" : "HISTORICAL"} />
         <Stat label="Pit loss SC / VSC" value={<>{s.pit_loss.under_sc} <span className="text-faint">/</span> {s.pit_loss.under_vsc}<span className="text-sm text-faint"> s</span></>} sub="assumed 45% / 62% of green" tag="ASSUMPTION" />
-        <Stat label="Optimal pit window" tag="MODEL" value={s.window ? `L${s.window.open}–${s.window.close}` : "—"} sub={s.window ? `best lap ${s.window.optimal} (±${s.window.tolerance_s} s band)` : "no stop planned / wet running"} />
+        <Stat label="Optimal pit window" tag="MODEL" value={plansPending ? <span className="text-faint">…</span> : s.window ? `L${s.window.open}–${s.window.close}` : "—"} sub={plansPending ? "simulating plans" : s.window ? `best lap ${s.window.optimal} (±${s.window.tolerance_s} s band)` : "no stop planned / wet running"} />
         <Stat label="Clean laps in fit" value={tm.n_clean_laps} sub={`prior: ${tm.prior}`} />
         <Stat label="Lap-time trend" value={<>{signed(tm.lap_trend_s_per_lap, 3)}<span className="text-sm text-faint"> s/lap</span></>} sub="fuel burn + track evolution" tag="MODEL" />
       </div>
@@ -42,7 +48,9 @@ export default function Strategy() {
       <Tabs tabs={[["plan", "Strategy plan"], ["tyres", "Tyres & rivals"], ["stints", "Stint history"]] as [string, string][]} value={tab} onChange={setTab} />
       {tab === "plan" && (<div className="page-in space-y-5">
       <Panel title={`Strategy options for ${s.focus_code ?? "—"} from lap ${s.lap}`} tags={["MODEL"]} pad={false} note={<>{s.method} {s.n_sims ? `${s.n_sims} simulations per option, same random futures for each.` : ""} “Model Δ” is the optimiser's deterministic time; “Sim Δ” includes traffic, incidents and rivals' stops.</>}>
-        <div className="overflow-auto"><table className="grid-t">
+        {plansPending && <div className="px-5 pb-5"><div className="mb-2 text-[11.5px] text-dim">Optimising stop laps and simulating each plan across the field…</div><State loading /></div>}
+        {pl.error && !fresh && <div className="px-5 pb-5"><State error={`Strategy plans: ${pl.error}`} /></div>}
+        <div className={`overflow-auto ${plansPending || (pl.error && !fresh) ? "hidden" : ""}`}><table className="grid-t">
           <thead><tr><th></th><th>Strategy</th><th>Stops (lap → tyre)</th><th style={{ minWidth: 260 }}>Stints</th><th className="r">Next stop</th><th className="r">Pit time lost</th><th className="r">Tyre wear cost</th><th className="r">Model Δ</th><th className="r">Sim Δ</th><th className="r">Exp. finish</th><th className="r">P10–P90</th><th className="r">Win</th><th className="r">Podium</th><th className="r">Laps in traffic</th></tr></thead>
           <tbody>{s.strategies.map((x: any) => (
             <tr key={x.label} className={x.recommended ? "!bg-good/10" : ""} style={{ opacity: x.rule_ok ? 1 : 0.5 }}>
@@ -59,7 +67,7 @@ export default function Strategy() {
 
       <div className="grid gap-5 xl:grid-cols-2">
         <Panel title="Pit-window sensitivity" tags={["MODEL"]} note="Time lost versus the best first-stop lap, later stops held fixed. The shaded band is the window (within 1 s of optimal).">
-          <State empty={!s.window ? "No pit window at this lap (no further stop planned, or the car is on wet-weather tyres)." : null}>
+          <State loading={plansPending} empty={plansPending ? null : !s.window ? "No pit window at this lap (no further stop planned, or the car is on wet-weather tyres)." : null}>
             {s.window && <ResponsiveContainer width="100%" height={230}>
               <LineChart data={s.window.curve} margin={{ top: 6, right: 10, bottom: 0, left: -16 }}>
                 <CartesianGrid stroke={GRID} vertical={false} /><XAxis dataKey="lap" type="number" domain={["dataMin", "dataMax"]} tickLine={false} axisLine={{ stroke: GRID }} tickFormatter={(v) => `L${v}`} />

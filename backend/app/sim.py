@@ -110,29 +110,31 @@ def context(session_key: int, lap: int | None = None) -> dict:
 def default_plans(ctx: dict) -> dict:
     """Each running driver's own time-optimal plan (CP-SAT), used as the competitor baseline."""
     st, m = ctx["st"], ctx["m"]
-    key = (st["session"]["session_key"], st["lap"])
-    if _plans.get("key") == key:
-        return _plans["val"]
+    key = (st["session"]["session_key"], st["lap"], round(st["T"] or 0))
+    if key in _plans:
+        return _plans[key]
     total, plans = st["total_laps"] or st["max_lap"], {}
     wx = st["weather"] or {}
     wpath = wetness_path(ctx["wet"]["wetness"], [0.3 if wx.get("rainfall") else 0.0] * max(1, total - st["lap"]),
                          wx.get("track_temperature"), wx.get("wind_speed"))
     dry_idx = np.nonzero(wpath < W_INTER_TO_SLICK - 0.03)[0]
     dry_lap = st["lap"] + 1 + int(dry_idx[0]) if len(dry_idx) else None   # lap at which slicks are expected to go on
+    memo: dict = {}
     for r in st["rows"]:
         if r["status"] != "RUNNING":
             continue
-        if r["compound"] in sg.WETS:
-            if dry_lap is None or total - dry_lap < 3:
-                plans[r["driver_number"]] = []
-                continue
-            opts = sg.strategies(m, dry_lap, total, None, 0, r["compounds_used"])
-        else:
-            opts = sg.strategies(m, st["lap"], total, r["compound"], r["tyre_age"] or 0, r["compounds_used"])
-        opts = [p for p in opts if p["rule_ok"] and p["label"] != "D"]
-        best = min(opts, key=lambda p: p["rel_time"]) if opts else None
+        # rivals only need their single best plan: exact vectorised search over the same cost model as CP-SAT
+        ck = (r["compound"], r["tyre_age"] or 0, tuple(r["compounds_used"]))
+        if ck not in memo:
+            if r["compound"] in sg.WETS:
+                memo[ck] = None if (dry_lap is None or total - dry_lap < 3) else sg.fast_plan(m, dry_lap, total, None, 0, r["compounds_used"])
+            else:
+                memo[ck] = sg.fast_plan(m, st["lap"], total, r["compound"], r["tyre_age"] or 0, r["compounds_used"])
+        best = memo[ck]
         plans[r["driver_number"]] = [(x["lap"], x["compound"]) for x in best["plan"]] if best else []
-    _plans.update(key=key, val=plans)
+    if len(_plans) > 24:
+        _plans.clear()
+    _plans[key] = plans
     return plans
 
 

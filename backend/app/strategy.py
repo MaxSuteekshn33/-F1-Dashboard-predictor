@@ -297,6 +297,91 @@ def optimise(m: dict, cur_lap: int, total_laps: int, comp: str | None, age: int,
             "pit_time_lost": stops * pit_loss, "deg_time": deg, "rule_ok": rule_ok}
 
 
+def fast_plan(m: dict, cur_lap: int, total_laps: int, comp: str | None, age: int, used: list[str],
+              pit_loss: float | None = None, allowed=SLICKS, min_stint: int = 4, max_stops: int = 3) -> dict | None:
+    """Exact search over the same cost model as `optimise` (stop laps × compounds, same rules), vectorised with
+    NumPy. Used for the nineteen rival cars, where only the best plan is needed; the focus car's options still go
+    through CP-SAT. Returns {"stops", "plan", "rel_time"} for the cheapest legal plan, or None."""
+    R = total_laps - cur_lap
+    if R < 1:
+        return None
+    pit_loss = m["pit_loss"] if pit_loss is None else pit_loss
+    cur = comp if comp in SLICKS else None
+    fresh = np.stack([stint_cost(m, c, 0, R, total_laps) + WARMUP[c] for c in allowed])        # [C, R]: cost of a stint of length i+1
+    first = stint_cost(m, cur, age, R, total_laps) if cur else None
+    used_dry = set(u for u in used if u in SLICKS)
+    need_other = (not any(u in WETS for u in used)) and len(used_dry) < 2
+    only = next(iter(used_dry), cur) if need_other else None
+    only_i = allowed.index(only) if only in allowed else -1
+    nC = len(allowed)
+    best = (np.inf, None)
+
+    def consider(cost, stops):
+        nonlocal best
+        if cost < best[0]:
+            best = (float(cost), stops)
+
+    if cur and not need_other:
+        consider(first[R - 1], [])
+    INF = 1e12
+    ks = range(1, max_stops + 1)
+    for k in ks:
+        fixed0 = 0 if not cur else None            # wet-shod: the first stop happens at cur_lap (stint 0 has no laps)
+        lo0 = 1
+        if R < (k * min(min_stint, R)) + (lo0 if cur else 0):
+            continue
+        # lengths: l0 (current tyres), then k fresh stints summing to R - l0
+        l0s = np.array([0]) if fixed0 == 0 else np.arange(lo0, R - k * min_stint + 1)
+        if not len(l0s):
+            continue
+        c0 = np.zeros(1) if fixed0 == 0 else first[l0s - 1]
+        rem = R - l0s                                                                               # laps left for fresh stints
+        if k == 1:
+            for a in range(nC):
+                if need_other and a == only_i:
+                    continue
+                ok = rem >= min(min_stint, R)
+                cost = np.where(ok, c0 + fresh[a][np.clip(rem, 1, R) - 1], INF) + pit_loss
+                i = int(np.argmin(cost))
+                consider(cost[i], [(int(cur_lap + l0s[i]), allowed[a])])
+        elif k == 2:
+            l1 = np.arange(min_stint, R)                                                            # first fresh stint length
+            l2 = rem[:, None] - l1[None, :]                                                         # [L0, L1]
+            ok = l2 >= min_stint
+            l2c = np.clip(l2, 1, R) - 1
+            for a in range(nC):
+                for b in range(nC):
+                    if need_other and a == only_i and b == only_i:
+                        continue
+                    cost = np.where(ok, c0[:, None] + fresh[a][l1 - 1][None, :] + fresh[b][l2c], INF) + 2 * pit_loss
+                    i, j = np.unravel_index(int(np.argmin(cost)), cost.shape)
+                    if cost[i, j] < INF:
+                        p1 = int(cur_lap + l0s[i]); consider(cost[i, j], [(p1, allowed[a]), (p1 + int(l1[j]), allowed[b])])
+        else:
+            l1 = np.arange(min_stint, R); l2 = np.arange(min_stint, R)
+            l3 = rem[:, None, None] - l1[None, :, None] - l2[None, None, :]                         # [L0, L1, L2]
+            ok = l3 >= min_stint
+            if not ok.any():
+                continue
+            l3c = np.clip(l3, 1, R) - 1
+            base12 = c0[:, None, None]
+            for a in range(nC):
+                fa = fresh[a][l1 - 1][None, :, None]
+                for b in range(nC):
+                    fb = fresh[b][l2 - 1][None, None, :]
+                    for c in range(nC):
+                        if need_other and a == only_i and b == only_i and c == only_i:
+                            continue
+                        cost = np.where(ok, base12 + fa + fb + fresh[c][l3c], INF) + 3 * pit_loss
+                        i, j, q = np.unravel_index(int(np.argmin(cost)), cost.shape)
+                        if cost[i, j, q] < INF:
+                            p1 = int(cur_lap + l0s[i]); p2 = p1 + int(l1[j])
+                            consider(cost[i, j, q], [(p1, allowed[a]), (p2, allowed[b]), (p2 + int(l2[q]), allowed[c])])
+    if best[1] is None:
+        return None
+    return {"stops": len(best[1]), "plan": [{"lap": a, "compound": b} for a, b in best[1]], "rel_time": best[0]}
+
+
 def window(m: dict, plan: dict, cur_lap: int, total_laps: int, comp: str, age: int, tol: float = 1.0) -> dict | None:
     """Sensitivity of the first stop lap: the pit window is every lap within `tol` seconds of the optimum."""
     if not plan or not plan["plan"] or comp not in SLICKS:
