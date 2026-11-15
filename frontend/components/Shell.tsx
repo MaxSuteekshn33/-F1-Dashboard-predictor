@@ -37,6 +37,19 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     }, 2500);
     return () => clearInterval(t);
   }, [playing, maxLap]); // eslint-disable-line
+  // What the lap control does when you move to another section: jump to the latest lap (the live lap during a
+  // race), go back to lap 1, or keep the lap you were on. Remembered per browser.
+  const [onNav, setOnNav] = useState<"latest" | "first" | "keep">("latest");
+  useEffect(() => { try { const v = localStorage.getItem("apex.onNav"); if (v === "latest" || v === "first" || v === "keep") setOnNav(v); } catch {} }, []);
+  const chooseNav = (v: "latest" | "first" | "keep") => { setOnNav(v); try { localStorage.setItem("apex.onNav", v); } catch {} };
+  const lastPath = useRef(path);
+  useEffect(() => {
+    if (lastPath.current === path) return;
+    lastPath.current = path;
+    setPlaying(false);
+    if (onNav === "latest") r.setLap(null);
+    if (onNav === "first") r.setLap(1);
+  }, [path]); // eslint-disable-line
   const mode = MODE[cmd?.mode?.mode || "HISTORICAL"];
   const st = STATUS[cmd?.track_status || "UNKNOWN"] || STATUS.UNKNOWN;
   const replaying = r.lap !== null && r.lap < maxLap;
@@ -90,6 +103,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 <button className="btn !px-3 !py-1" onClick={() => { if (!playing && lap >= maxLap) r.setLap(1); setPlaying(!playing); }} title="Replay the race lap by lap">{playing ? "Pause" : "▶ Replay"}</button>
                 {replaying && <button className="btn !px-3 !py-1" onClick={() => { setPlaying(false); r.setLap(null); }}>Latest</button>}
               </div>
+              <label className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[.12em] text-faint" title="Which lap to show when you open another section">
+                <span className="hidden xl:inline">On page change</span>
+                <select value={onNav} onChange={(e) => chooseNav(e.target.value as any)} aria-label="Lap to show when changing section" className="normal-case tracking-normal">
+                  <option value="latest">Latest lap</option><option value="first">Lap 1</option><option value="keep">Keep my lap</option>
+                </select>
+              </label>
               <select value={r.driver ?? ""} onChange={(e) => r.setDriver(Number(e.target.value))} aria-label="Focus driver" title="Focus driver for strategy, weather and recommendations">
                 {(cmd?.rows || []).map((d: any) => <option key={d.driver_number} value={d.driver_number}>P{d.position} · {d.code}</option>)}
               </select>
