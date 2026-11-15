@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from . import db, racestate as rs
 from .config import MODEL_DIR
-from .prerace import scores, normalise, wilson, model_path
+from .prerace import scores, normalise, wilson, model_path, tree_shap
 
 warnings.filterwarnings("ignore")
 FEATS = ["position", "gap_s", "interval_s", "laps_remaining", "frac_done", "tyre_age", "c_soft", "c_medium", "c_hard",
@@ -246,8 +246,7 @@ def predict(session_key: int, lap: int | None = None) -> pd.DataFrame | None:
     f["ml_pos_score"] = b["models"]["pos"].predict(X)
     f["ml_pred_pos"] = f.ml_pos_score.rank(method="first").astype(int)
     try:
-        import shap
-        sv = shap.TreeExplainer(b["models"]["win"]["xgboost"]).shap_values(X)
+        sv = tree_shap(b["models"]["win"]["xgboost"], X)
         f["explain"] = [[{"feature": FEATS[j], "label": LABELS[FEATS[j]], "shap": round(float(sv[i][j]), 3),
                           "value": None if pd.isna(X.iloc[i, j]) else round(float(X.iloc[i, j]), 3)}
                          for j in np.argsort(-np.abs(sv[i]))[:5]] for i in range(len(f))]

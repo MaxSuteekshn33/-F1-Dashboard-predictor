@@ -1,6 +1,6 @@
 """APEX F1 Intelligence — API. Run: uvicorn app.main:app --port 8000"""
 from __future__ import annotations
-import asyncio, os, time
+import asyncio, os, threading, time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,9 +29,14 @@ app = FastAPI(title="APEX F1 Intelligence", version="1.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
 
+# Heavy requests (models, simulations) run a few at a time so memory stays bounded on small hosts.
+_slots = threading.BoundedSemaphore(int(os.getenv("APEX_MAX_CONCURRENCY", "2")))
+
+
 def guard(fn, *a, **k):
     try:
-        return sv.clean(fn(*a, **k))
+        with _slots:
+            return sv.clean(fn(*a, **k))
     except KeyError as e:
         raise HTTPException(404, str(e))
     except HTTPException:
@@ -125,6 +130,12 @@ def weather_get(session_key: int | None = None, lap: int | None = None, driver: 
 @app.post("/api/weather/scenario")
 def weather_scenario(body: dict = Body(...)):
     return guard(weather.intelligence, body.get("session_key") or default_key(), body.get("lap"), body.get("driver"), body.get("what_if") or {})
+
+
+@app.get("/api/weather/summary")
+def weather_summary(session_key: int | None = None, lap: int | None = None):
+    """Forecast headline only (no simulation) — used by the Command Centre tile."""
+    return guard(weather.summary, session_key or default_key(), lap)
 
 
 @app.get("/api/weather/next")

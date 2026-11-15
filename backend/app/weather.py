@@ -246,6 +246,20 @@ def intelligence(session_key: int, lap: int | None, focus: int | None, what_if: 
     }
 
 
+def summary(session_key: int, lap: int | None) -> dict:
+    """Forecast headline for the session window, without running any simulation."""
+    st = rs.state(session_key, lap)
+    f1 = st.get("f1db") or {}
+    if f1.get("latitude") is None or not st["T"]:
+        return {"forecast": {"available": False, "reason": "Circuit coordinates unknown.", "summary": {}}}
+    rows = [r for r in st["rows"] if r["status"] == "RUNNING" and r["last_lap"]]
+    lap_s = float(np.median([r["last_lap"] for r in rows])) if rows else 90.0
+    fc = forecast(f1["latitude"], f1["longitude"], st["session"]["date_start"], st["session"]["date_end"] or st["T"] + 7200, f1.get("circuit_id", ""))
+    R = max(0, (st["total_laps"] or st["max_lap"]) - st["lap"])
+    _, fsum = rain_timeline(fc, st["T"], R, lap_s)
+    return {"forecast": {**{k: v for k, v in fc.items() if k != "rows"}, "summary": fsum}}
+
+
 def _weather_text(kind, st, me, fsum, best, alt, cross_lap, wi) -> str:
     left = (st["total_laps"] or st["max_lap"]) - st["lap"]
     head = ("User scenario: " if wi else "")

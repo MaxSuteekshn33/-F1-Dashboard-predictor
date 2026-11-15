@@ -53,9 +53,10 @@ training. `backend/seed/SEED_INFO.txt` says what the snapshot contains.
 
 What the free plan means:
 
-- **Memory**: started from the snapshot, the API used 300–350 MB locally across all modules, 20 races and
-  4 × 5,000-run simulations. Render's free plan allows 512 MB. This was measured on a development machine,
-  not on Render.
+- **Memory**: a dashboard visit fires about ten requests at once. With the blueprint's limits (one heavy
+  request at a time, single-threaded maths) the API peaked at 320 MB under that load on a development
+  machine, against the free plan's 512 MB. Without the limits it peaked at 403 MB and crashed on Render.
+- **Speed**: the free plan's CPU share is small — heavy pages take 10–25 seconds, and requests queue.
 - **No persistence**: free services have no disk and sleep when idle. Every wake-up restores the snapshot,
   so anything fetched since (new sessions, telemetry laps, forecast snapshots) is lost, and the first
   request after a sleep is slow.
@@ -79,6 +80,8 @@ The hosted setup has not been deployed or tested from this repository.
 | `MC_SIMS` | 1000 | Monte Carlo runs per scenario |
 | `APEX_SEED` | 1 | restore `backend/seed/` on first start when no database exists (SQLite only) |
 | `APEX_BOOTSTRAP` | 0 | 1 = build the database and models on first start (`quick` = latest race only) |
+| `APEX_MAX_CONCURRENCY` | 2 | heavy API requests processed at once (1 on small hosts) |
+| `NEXT_PUBLIC_API_URL` | derived from `NEXT_PUBLIC_WS_URL` | front end calls the API directly at this address instead of through `/api` rewrites |
 | `APEX_AUTO_RETRAIN` | 0 | 1 = refresh data and retrain on start-up when new races exist |
 | `BACKEND_URL`, `NEXT_PUBLIC_WS_URL` | localhost:8000 | front end → API proxy and WebSocket |
 
@@ -123,7 +126,7 @@ HISTORICAL, MODEL, ASSUMPTION or FORECAST.
 All validation is walk-forward by season: train on seasons before S, test on S. No random splits.
 
 **Pre-race** (`app/prerace.py`) — XGBoost, LightGBM, CatBoost and logistic regression, averaged and
-normalised per race; XGBoost tuned with Optuna. Features are built only from earlier races (rolling form,
+normalised per race; XGBoost tuned with Optuna; explanations are SHAP values from XGBoost's built-in TreeSHAP. Features are built only from earlier races (rolling form,
 circuit history, constructor form, reliability, pit-lane time) plus this weekend's qualifying. Tested on
 172 races, 2019–2026:
 

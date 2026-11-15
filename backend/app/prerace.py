@@ -363,6 +363,13 @@ def load(variant: str) -> dict | None:
     return _bundles[variant]
 
 
+def tree_shap(model, X) -> np.ndarray:
+    """SHAP values (log-odds) from XGBoost's built-in exact TreeSHAP — same numbers as shap.TreeExplainer
+    without importing the shap package (saves ~45 MB of memory on small hosts)."""
+    import xgboost as xgb
+    return model.get_booster().predict(xgb.DMatrix(X), pred_contribs=True)[:, :-1]
+
+
 def _cal(c, p):
     return p if c is None else c.predict(p) + 1e-5
 
@@ -394,8 +401,7 @@ def predict(rows: pd.DataFrame, variant: str, n_sims: int = 5000) -> pd.DataFram
     out["exp_points"] = pts.mean(0)
     out["pos_dist"] = [np.bincount(pos[:, i], minlength=len(rows) + 1)[1:].astype(float) / n_sims for i in range(len(rows))]
     try:
-        import shap
-        sv = shap.TreeExplainer(b["models"]["win"]["xgboost"]).shap_values(X)
+        sv = tree_shap(b["models"]["win"]["xgboost"], X)
         ex = []
         for i in range(len(rows)):
             top = np.argsort(-np.abs(sv[i]))[:5]

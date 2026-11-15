@@ -1,8 +1,13 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+// API base: call the backend directly when its address is known at build time (NEXT_PUBLIC_API_URL, or derived
+// from NEXT_PUBLIC_WS_URL), so slow model requests are not cut off by the hosting proxy; otherwise use /api rewrites.
+const WS = process.env.NEXT_PUBLIC_WS_URL || "";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || (WS ? WS.replace(/^ws/, "http").replace(/\/ws\/live\/?$/, "") : "");
+
 export async function api<T = any>(path: string, body?: unknown): Promise<T> {
-  const r = await fetch(path, body === undefined ? { cache: "no-store" } :
+  const r = await fetch(API_BASE + path, body === undefined ? { cache: "no-store" } :
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) {
     let msg = `${r.status}`;

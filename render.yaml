@@ -12,5 +12,14 @@ services:
     envVars:
       - key: CORS_ORIGINS
         value: "*"
+      # keep memory inside the free plan's 512 MB: one heavy request at a time, single-threaded maths
+      - key: APEX_MAX_CONCURRENCY
+        value: "1"
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"
       # Optional paid OpenF1 account for real-time data: add OPENF1_USERNAME and OPENF1_PASSWORD
       # in the service's Environment tab after it is created.

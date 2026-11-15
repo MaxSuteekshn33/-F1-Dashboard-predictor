@@ -11,7 +11,7 @@ export default function CommandCentre() {
   const [team, setTeam] = useState("");
   const [text, setText] = useState("");
   const [cont, setCont] = useState(false);
-  const { data: wx } = useApi<any>(r.sessionKey ? `/api/weather?${r.q}` : null, r.tick);
+  const { data: wx } = useApi<any>(r.sessionKey ? `/api/weather/summary?${r.q}` : null, r.tick);
   const teams = useMemo(() => Array.from(new Set((c?.rows || []).map((x: any) => x.team).filter(Boolean))).sort() as string[], [c]);
   const contenders: string[] = r.status?.contenders || [];
   const rows = (c?.rows || []).filter((x: any) => (!team || x.team === team) && (!cont || contenders.includes(x.code)) &&
