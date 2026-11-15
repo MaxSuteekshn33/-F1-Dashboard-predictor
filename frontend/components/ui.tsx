@@ -3,7 +3,7 @@ import React from "react";
 
 // Chart palette: categorical slots validated for the dark surface (dataviz reference palette, fixed order).
 export const SERIES = ["#3987e5", "#d95926", "#199e70", "#c98500"];
-export const GRID = "#1f2329";
+export const GRID = "rgba(255,255,255,0.07)";
 export const COMPOUND: Record<string, { c: string; l: string }> = {
   SOFT: { c: "#ff4b3e", l: "S" }, MEDIUM: { c: "#f2c230", l: "M" }, HARD: { c: "#e9eaec", l: "H" },
   INTERMEDIATE: { c: "#3dbb61", l: "I" }, WET: { c: "#3d8bf2", l: "W" },
@@ -31,39 +31,60 @@ export const ago = (ts?: number | null) => {
 export const dt = (ts?: number | null) => (ts ? new Date(ts * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC" : "—");
 
 const TAGS: Record<string, string> = {
-  OBSERVED: "border-[#2b5a8f] text-[#7fb6f5]", HISTORICAL: "border-[#6a5a2a] text-[#d9b95a]", MODEL: "border-[#5a3f8a] text-[#b79cf0]",
-  ASSUMPTION: "border-[#6b3a3a] text-[#f09a94]", FORECAST: "border-[#2a6a5a] text-[#6fd3b8]", UNAVAILABLE: "border-line text-faint",
+  OBSERVED: "#7fb6f5", HISTORICAL: "#d9b95a", MODEL: "#b79cf0", ASSUMPTION: "#f09a94", FORECAST: "#6fd3b8", UNAVAILABLE: "#7c8290",
 };
-/** Provenance label: where a number comes from. */
-export function Tag({ kind, children }: { kind: keyof typeof TAGS | string; children?: React.ReactNode }) {
-  return <span className={`inline-block rounded border px-1.5 py-[1px] text-[9px] font-semibold tracking-wider ${TAGS[kind] || TAGS.UNAVAILABLE}`}
-    title={{ OBSERVED: "Recorded data from a provider", HISTORICAL: "Estimate from past races", MODEL: "Model prediction", ASSUMPTION: "Scenario or modelling assumption",
-      FORECAST: "Weather-model forecast, not a track measurement" }[kind as string] || ""}>{children || kind}</span>;
+const TAG_HELP: Record<string, string> = { OBSERVED: "Recorded data from a provider", HISTORICAL: "Estimate from past races", MODEL: "Model prediction",
+  ASSUMPTION: "Scenario or modelling assumption", FORECAST: "Weather-model forecast, not a track measurement" };
+/** Provenance label: where a number comes from. Quiet by design — a coloured dot and a small word. */
+export function Tag({ kind, children }: { kind: string; children?: React.ReactNode }) {
+  const c = TAGS[kind] || TAGS.UNAVAILABLE;
+  return <span className="inline-flex items-center gap-1 whitespace-nowrap text-[9.5px] font-medium uppercase tracking-[.1em]" style={{ color: c }} title={TAG_HELP[kind] || ""}>
+    <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />{children || kind}</span>;
 }
 
 export function Panel({ title, tags, right, children, className = "", note, pad = true }:
   { title?: React.ReactNode; tags?: string[]; right?: React.ReactNode; children: React.ReactNode; className?: string; note?: React.ReactNode; pad?: boolean }) {
   return (
-    <section className={`rounded-md border border-line bg-panel ${className}`}>
+    <section className={`glass overflow-hidden rounded-2xl ${className}`}>
       {(title || right) && (
-        <header className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[.12em] text-dim">{title}</h2>
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 pb-3 pt-4">
+          <h2 className="text-[13px] font-semibold tracking-tight text-ink">{title}</h2>
           {tags?.map((t) => <Tag key={t} kind={t} />)}
-          <div className="ml-auto flex items-center gap-2 text-xs text-dim">{right}</div>
+          <div className="ml-auto flex flex-wrap items-center gap-2 text-xs text-dim">{right}</div>
         </header>
       )}
-      <div className={pad ? "p-3" : ""}>{children}</div>
-      {note && <footer className="border-t border-line px-3 py-2 text-[11px] leading-relaxed text-faint">{note}</footer>}
+      <div className={pad ? `px-5 pb-5 ${title || right ? "" : "pt-5"}` : ""}>{children}</div>
+      {note && (
+        <details className="more border-t border-line px-5 py-2.5">
+          <summary>How to read this</summary>
+          <div className="pb-1 pt-2 text-[11.5px] leading-relaxed text-dim">{note}</div>
+        </details>
+      )}
     </section>
   );
 }
 
 export function Stat({ label, value, sub, tag, accent }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tag?: string; accent?: string }) {
   return (
-    <div className="rounded-md border border-line bg-panel px-3 py-2.5">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[.1em] text-faint">{label}{tag && <Tag kind={tag} />}</div>
-      <div className="num mt-1 text-xl font-semibold leading-tight" style={accent ? { color: accent } : undefined}>{value}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-dim">{sub}</div>}
+    <div className="glass rounded-2xl px-4 py-3.5">
+      <div className="flex items-center justify-between gap-2 text-[10.5px] font-medium uppercase tracking-[.09em] text-faint"><span className="truncate">{label}</span>
+        {tag && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: TAGS[tag] || TAGS.UNAVAILABLE }} title={`${tag} — ${TAG_HELP[tag] || ""}`} />}</div>
+      <div className="num mt-1.5 text-[22px] font-semibold leading-none tracking-tight" style={accent ? { color: accent } : undefined}>{value}</div>
+      {sub && <div className="mt-1.5 truncate text-[11px] text-dim" title={typeof sub === "string" ? sub : undefined}>{sub}</div>}
+    </div>
+  );
+}
+
+/** Segmented tab bar: splits a long page into a few calm views (keyboard: arrow keys). */
+export function Tabs({ tabs, value, onChange }: { tabs: [string, string][]; value: string; onChange: (v: string) => void }) {
+  const move = (d: number) => { const i = tabs.findIndex((t) => t[0] === value); onChange(tabs[(i + d + tabs.length) % tabs.length][0]); };
+  return (
+    <div role="tablist" className="glass inline-flex max-w-full gap-1 overflow-x-auto rounded-full p-1"
+      onKeyDown={(e) => { if (e.key === "ArrowRight") move(1); if (e.key === "ArrowLeft") move(-1); }}>
+      {tabs.map(([k, label]) => (
+        <button key={k} role="tab" aria-selected={value === k} tabIndex={value === k ? 0 : -1} onClick={() => onChange(k)}
+          className={`whitespace-nowrap rounded-full px-4 py-1.5 text-[12.5px] font-medium transition-all duration-200 ${value === k ? "bg-white/[0.14] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,.12)]" : "text-dim hover:text-ink"}`}>{label}</button>
+      ))}
     </div>
   );
 }
@@ -73,7 +94,7 @@ export function Tyre({ compound, age }: { compound?: string | null; age?: number
   const c = COMPOUND[compound] || { c: "#6b717d", l: "?" };
   return (
     <span className="inline-flex items-center gap-1.5" title={compound}>
-      <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 text-[9px] font-bold" style={{ borderColor: c.c, color: c.c }}>{c.l}</span>
+      <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full border-[1.5px] text-[9px] font-bold" style={{ borderColor: c.c, color: c.c, background: `${c.c}14` }}>{c.l}</span>
       {age !== undefined && age !== null && <span className="num text-dim">{age}</span>}
     </span>
   );
@@ -82,7 +103,7 @@ export function Tyre({ compound, age }: { compound?: string | null; age?: number
 export function Driver({ code, colour, name }: { code?: string | null; colour?: string | null; name?: string }) {
   return (
     <span className="inline-flex items-center gap-2" title={name}>
-      <span className="inline-block h-3.5 w-1 rounded-sm" style={{ background: teamColour(colour) }} />
+      <span className="inline-block h-3.5 w-[3px] rounded-full" style={{ background: teamColour(colour) }} />
       <span className="font-semibold tracking-wide">{code || "—"}</span>
     </span>
   );
@@ -91,16 +112,19 @@ export function Driver({ code, colour, name }: { code?: string | null; colour?: 
 export function Bar({ value, max = 1, colour = SERIES[0], label }: { value: number; max?: number; colour?: string; label?: string }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="h-2 flex-1 rounded-sm bg-[#1c1f25]"><div className="h-2 rounded-sm" style={{ width: `${Math.max(0, Math.min(1, value / max)) * 100}%`, background: colour }} /></div>
+      <div className="h-1.5 flex-1 rounded-full bg-white/[0.08]"><div className="h-1.5 rounded-full" style={{ width: `${Math.max(0, Math.min(1, value / max)) * 100}%`, background: colour }} /></div>
       {label && <span className="num w-12 text-right text-[11px]">{label}</span>}
     </div>
   );
 }
 
 export function State({ loading, error, empty, children }: { loading?: boolean; error?: string | null; empty?: string | null; children?: React.ReactNode }) {
-  if (error) return <div className="rounded border border-[#6b3a3a] bg-[#1d1213] px-3 py-2 text-xs text-[#f09a94]"><b>Unavailable.</b> {error}</div>;
-  if (empty) return <div className="rounded border border-line bg-panel2 px-3 py-2 text-xs text-dim">{empty}</div>;
-  if (loading && !children) return <div className="animate-pulse px-1 py-6 text-center text-xs text-faint">Calculating…</div>;
+  if (error) return <div className="rounded-xl border border-bad/30 bg-bad/10 px-4 py-3 text-xs text-[#ffb3ae]"><b>Unavailable.</b> {error}</div>;
+  if (empty) return <div className="rounded-xl border border-line bg-white/[0.04] px-4 py-3 text-xs text-dim">{empty}</div>;
+  if (loading && !children) return (
+    <div className="space-y-2.5 py-3" aria-label="Loading" role="status">
+      <div className="skeleton h-4 w-1/3" /><div className="skeleton h-4 w-full" /><div className="skeleton h-4 w-5/6" /><div className="skeleton h-4 w-2/3" />
+    </div>);
   return <>{children}</>;
 }
 
@@ -108,17 +132,17 @@ export function Notes({ items, title = "Limitations" }: { items?: (string | null
   const list = (items || []).filter(Boolean) as string[];
   if (!list.length) return null;
   return (
-    <div className="rounded-md border border-line bg-panel2 px-3 py-2">
-      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[.12em] text-faint">{title}</div>
-      <ul className="space-y-0.5 text-[11px] leading-relaxed text-dim">{list.map((x, i) => <li key={i}>• {x}</li>)}</ul>
-    </div>
+    <details className="more glass rounded-2xl px-5 py-3">
+      <summary>{title} <span className="num text-faint">({list.length})</span></summary>
+      <ul className="space-y-1 pb-1 pt-2.5 text-[11.5px] leading-relaxed text-dim">{list.map((x, i) => <li key={i} className="flex gap-2"><span className="text-faint">–</span><span>{x}</span></li>)}</ul>
+    </details>
   );
 }
 
 export function ChartTip({ active, payload, label, fmt, title }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded border border-line bg-[#0d0f12] px-2.5 py-1.5 text-[11px] shadow-lg">
+    <div className="glass-strong rounded-xl px-3 py-2 text-[11px]">
       <div className="mb-0.5 text-faint">{title ? title(label) : label}</div>
       {payload.map((p: any, i: number) => (
         <div key={i} className="flex items-center gap-2">

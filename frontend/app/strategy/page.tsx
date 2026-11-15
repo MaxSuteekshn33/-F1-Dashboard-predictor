@@ -1,12 +1,13 @@
 "use client";
+import { useState } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
 import { useApi, useRace } from "@/lib/api";
-import { COMPOUND, ChartTip, Driver, GRID, Notes, Panel, Stat, State, Tag, Tyre, fmtLap, num, pct, signed } from "@/components/ui";
+import { COMPOUND, ChartTip, Driver, GRID, Notes, Panel, Stat, State, Tag, Tyre, fmtLap, num, pct, signed, Tabs } from "@/components/ui";
 
 function Stints({ stints, total, lap, plan }: { stints: any[]; total: number; lap: number; plan?: any[] }) {
   const w = (a: number, b: number) => `${((b - a + 1) / total) * 100}%`;
   return (
-    <div className="relative h-5 w-full rounded-sm bg-[#1c1f25]">
+    <div className="relative h-5 w-full rounded-sm bg-white/[0.08]">
       {stints.map((s, i) => (
         <div key={i} className="absolute top-0 flex h-5 items-center justify-center rounded-sm text-[9px] font-bold text-black" title={`${s.compound} laps ${s.from}–${s.to}`}
           style={{ left: `${((s.from - 1) / total) * 100}%`, width: `calc(${w(s.from, s.to)} - 2px)`, background: COMPOUND[s.compound]?.c || "#6b717d", opacity: s.future ? 0.45 : 1 }}>{COMPOUND[s.compound]?.l}</div>
@@ -18,6 +19,7 @@ function Stints({ stints, total, lap, plan }: { stints: any[]; total: number; la
 
 export default function Strategy() {
   const r = useRace();
+  const [tab, setTab] = useState("plan");
   const { data: s, loading, error } = useApi<any>(r.sessionKey && r.driver ? `/api/strategy?${r.q}&driver=${r.driver}` : null, r.tick);
   if (!s) return <State loading={loading} error={error} />;
   const tm = s.tyre_model;
@@ -26,8 +28,8 @@ export default function Strategy() {
   const degBy: Record<string, any[]> = {};
   for (const p of s.deg_points) (degBy[p.compound] = degBy[p.compound] || []).push(p);
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
         <Stat label="Focus driver" value={s.focus_code ?? "—"} sub={`lap ${s.lap} of ${s.total_laps}`} />
         <Stat label="Pit loss (green)" value={<>{s.pit_loss.seconds}<span className="text-sm text-faint"> s</span></>} sub={s.pit_loss.source} tag={s.pit_loss.source.startsWith("measured") ? "OBSERVED" : "HISTORICAL"} />
         <Stat label="Pit loss SC / VSC" value={<>{s.pit_loss.under_sc} <span className="text-faint">/</span> {s.pit_loss.under_vsc}<span className="text-sm text-faint"> s</span></>} sub="assumed 45% / 62% of green" tag="ASSUMPTION" />
@@ -37,11 +39,13 @@ export default function Strategy() {
       </div>
       {s.note && <State empty={s.note} />}
 
+      <Tabs tabs={[["plan", "Strategy plan"], ["tyres", "Tyres & rivals"], ["stints", "Stint history"]] as [string, string][]} value={tab} onChange={setTab} />
+      {tab === "plan" && (<div className="page-in space-y-5">
       <Panel title={`Strategy options for ${s.focus_code ?? "—"} from lap ${s.lap}`} tags={["MODEL"]} pad={false} note={<>{s.method} {s.n_sims ? `${s.n_sims} simulations per option, same random futures for each.` : ""} “Model Δ” is the optimiser's deterministic time; “Sim Δ” includes traffic, incidents and rivals' stops.</>}>
         <div className="overflow-auto"><table className="grid-t">
           <thead><tr><th></th><th>Strategy</th><th>Stops (lap → tyre)</th><th style={{ minWidth: 260 }}>Stints</th><th className="r">Next stop</th><th className="r">Pit time lost</th><th className="r">Tyre wear cost</th><th className="r">Model Δ</th><th className="r">Sim Δ</th><th className="r">Exp. finish</th><th className="r">P10–P90</th><th className="r">Win</th><th className="r">Podium</th><th className="r">Laps in traffic</th></tr></thead>
           <tbody>{s.strategies.map((x: any) => (
-            <tr key={x.label} className={x.recommended ? "!bg-[#141a14]" : ""} style={{ opacity: x.rule_ok ? 1 : 0.5 }}>
+            <tr key={x.label} className={x.recommended ? "!bg-good/10" : ""} style={{ opacity: x.rule_ok ? 1 : 0.5 }}>
               <td className="num font-bold">{x.label}</td>
               <td className="font-semibold">{x.name}{x.recommended && <span className="ml-2 rounded bg-good px-1.5 py-[1px] text-[9px] font-bold text-black">RECOMMENDED</span>}{!x.rule_ok && <span className="ml-2 text-[10px] text-bad">breaks 2-compound rule</span>}</td>
               <td>{x.plan.length ? x.plan.map((p: any, i: number) => <span key={i} className="mr-2 inline-flex items-center gap-1"><span className="num">L{p.lap}</span><Tyre compound={p.compound} /></span>) : <span className="text-faint">none</span>}</td>
@@ -53,7 +57,7 @@ export default function Strategy() {
         </table></div>
       </Panel>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-5 xl:grid-cols-2">
         <Panel title="Pit-window sensitivity" tags={["MODEL"]} note="Time lost versus the best first-stop lap, later stops held fixed. The shaded band is the window (within 1 s of optimal).">
           <State empty={!s.window ? "No pit window at this lap (no further stop planned, or the car is on wet-weather tyres)." : null}>
             {s.window && <ResponsiveContainer width="100%" height={230}>
@@ -76,8 +80,9 @@ export default function Strategy() {
             </ScatterChart></ResponsiveContainer>
         </Panel>
       </div>
-
-      <div className="grid gap-4 xl:grid-cols-3">
+      </div>)}
+      {tab === "tyres" && (<div className="page-in space-y-5">
+      <div className="grid gap-5 xl:grid-cols-3">
         <Panel title="Fitted tyre model" tags={["MODEL"]} pad={false} note={tm.base_source}>
           <table className="grid-t"><thead><tr><th>Compound</th><th className="r">Wear</th><th className="r">Pace offset</th><th className="r">Laps</th><th>Basis</th></tr></thead>
             <tbody>{["SOFT", "MEDIUM", "HARD"].map((c) => { const x = tm.compounds[c]; return <tr key={c}><td><Tyre compound={c} /> <span className="ml-1">{c}</span></td><td className="r num">{signed(x.deg, 3)} s/lap</td><td className="r num">{signed(x.offset, 2)} s</td><td className="r num">{x.n_laps}</td><td className="whitespace-normal text-[11px] text-dim">{x.source}</td></tr>; })}</tbody></table>
@@ -91,15 +96,17 @@ export default function Strategy() {
         </Panel>
         <Panel title="Competitor pit windows" tags={["MODEL"]} pad={false} note="Each rival's own time-optimal next stop from the same optimiser.">
           <div className="max-h-[260px] overflow-auto"><table className="grid-t"><thead><tr><th>Pos</th><th>Driver</th><th>Tyre · age</th><th className="r">Next stop</th><th>Onto</th></tr></thead>
-            <tbody>{s.competitors.map((c: any) => <tr key={c.driver_number} className={c.driver_number === s.focus ? "!bg-[#16191e]" : ""}><td className="num">{c.position}</td><td className="font-semibold">{c.code}</td><td><Tyre compound={c.compound} age={c.tyre_age} /></td><td className="r num">{c.next_stop ? `L${c.next_stop}` : "—"}</td><td><Tyre compound={c.next_compound} /></td></tr>)}</tbody></table></div>
+            <tbody>{s.competitors.map((c: any) => <tr key={c.driver_number} className={c.driver_number === s.focus ? "!bg-white/[0.07]" : ""}><td className="num">{c.position}</td><td className="font-semibold">{c.code}</td><td><Tyre compound={c.compound} age={c.tyre_age} /></td><td className="r num">{c.next_stop ? `L${c.next_stop}` : "—"}</td><td><Tyre compound={c.next_compound} /></td></tr>)}</tbody></table></div>
         </Panel>
       </div>
-
+      </div>)}
+      {tab === "stints" && (<div className="page-in space-y-5">
       <Panel title="Stint history — all cars" tags={["OBSERVED"]}>
         <div className="space-y-1">{s.drivers.map((d: any) => (
           <div key={d.driver_number} className="grid grid-cols-[28px_44px_minmax(0,1fr)] items-center gap-2 text-xs"><span className="num text-faint">{d.position}</span><Driver code={d.code} colour={d.team_colour} />
             <Stints total={s.total_laps} lap={s.lap} stints={s.stints.filter((x: any) => x.driver_number === d.driver_number)} /></div>))}</div>
       </Panel>
+      </div>)}
       <Notes title="Assumptions" items={[...s.assumptions, s.pit_loss.neutralised_note]} />
     </div>
   );

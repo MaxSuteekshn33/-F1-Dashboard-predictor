@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api, useApi, useRace } from "@/lib/api";
-import { ChartTip, Confidence, GRID, Notes, Panel, SERIES, Stat, State, Tag, num, pct, dt } from "@/components/ui";
+import { ChartTip, Confidence, GRID, Notes, Panel, SERIES, Stat, State, Tag, num, pct, dt, Tabs } from "@/components/ui";
 import { OptionTable, PositionDist } from "@/components/Options";
 
 const hm = (t: number) => new Date(t * 1000).toISOString().slice(11, 16);
@@ -17,6 +17,7 @@ const PRESETS: { key: string; label: string; what_if: any; group: string }[] = [
 
 export default function Weather() {
   const r = useRace();
+  const [tab, setTab] = useState("decision");
   const base = useApi<any>(r.sessionKey && r.driver ? `/api/weather?${r.q}&driver=${r.driver}` : null, r.tick);
   const next = useApi<any>("/api/weather/next");
   const [wi, setWi] = useState<any | null>(null);
@@ -37,20 +38,21 @@ export default function Weather() {
   const w = d.current.observed, px = d.current.wetness_proxy, fc = d.forecast, rec = d.recommendation;
   const best = rec?.recommended;
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-        <Stat label="Track temp" tag="OBSERVED" value={w ? `${num(w.track_temperature)}°C` : "—"} sub={w?.track_temp_trend_15min !== null && w ? `${w.track_temp_trend_15min > 0 ? "+" : ""}${w.track_temp_trend_15min}° in 15 min` : ""} />
-        <Stat label="Air temp" tag="OBSERVED" value={w ? `${num(w.air_temperature)}°C` : "—"} sub={w ? `humidity ${num(w.humidity, 0)}%` : ""} />
-        <Stat label="Rain sensor" tag="OBSERVED" value={w ? (w.rainfall ? "RAIN" : "DRY") : "—"} accent={w?.rainfall ? "#3d8bf2" : undefined} sub={w ? `${Math.round((w.rain_share_15min ?? 0) * 100)}% of last 15 min` : ""} />
-        <Stat label="Wind" tag="OBSERVED" value={w ? `${num(w.wind_speed)} m/s` : "—"} sub={w ? `direction ${num(w.wind_direction, 0)}°` : ""} />
-        <Stat label="Track wetness" tag="MODEL" value={num(px.wetness, 2)} sub={`${Math.round(px.share_on_inters * 100)}% of field on inters`} />
-        <Stat label="Precip. probability" tag="FORECAST" value={fc.summary?.max_prob !== null && fc.summary?.max_prob !== undefined ? `${fc.summary.max_prob}%` : "—"} sub="max over remaining window" />
-        <Stat label="Forecast rain" tag="FORECAST" value={fc.summary?.total_mm !== null && fc.summary?.total_mm !== undefined ? `${fc.summary.total_mm} mm` : "—"} sub={fc.summary?.first_rain_min !== null && fc.summary?.first_rain_min !== undefined ? `first rain in ~${fc.summary.first_rain_min} min` : "none in window"} />
-        <Stat label="Tyre crossover" tag="ASSUMPTION" value={`${d.crossover.slick_to_inter} / ${d.crossover.inter_to_wet}`} sub="wetness: slick→inter / inter→wet" />
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Track / air" tag="OBSERVED" value={w ? <>{num(w.track_temperature)}°<span className="text-faint"> / </span>{num(w.air_temperature)}°</> : "—"}
+          sub={w ? `Humidity ${num(w.humidity, 0)}% · wind ${num(w.wind_speed)} m/s from ${num(w.wind_direction, 0)}°` : ""} />
+        <Stat label="Rain at the track" tag="OBSERVED" value={w ? (w.rainfall ? "Raining" : "Dry") : "—"} accent={w?.rainfall ? "#3d8bf2" : undefined} sub={w ? `Sensor wet ${Math.round((w.rain_share_15min ?? 0) * 100)}% of last 15 min` : ""} />
+        <Stat label="Track wetness" tag="MODEL" value={num(px.wetness, 2)} sub={`${Math.round(px.share_on_inters * 100)}% of field on intermediates · slicks until ${d.crossover.slick_to_inter}`} />
+        <Stat label="Rain probability" tag="FORECAST" value={fc.summary?.max_prob !== null && fc.summary?.max_prob !== undefined ? `${fc.summary.max_prob}%` : "—"}
+          sub={fc.summary?.first_rain_min !== null && fc.summary?.first_rain_min !== undefined ? `${fc.summary.total_mm} mm expected · first in ~${fc.summary.first_rain_min} min` : "No rain in the remaining window"} />
       </div>
-      {d.forecast_observation_mismatch && <div className="rounded border border-warn/40 bg-[#211a08] px-3 py-2 text-xs text-warn"><b>Forecast ≠ track.</b> {d.forecast_observation_mismatch}</div>}
-      {fc.caveat && <div className="rounded border border-line bg-panel2 px-3 py-2 text-[11px] text-dim"><Tag kind="FORECAST" /> <span className="ml-1">{fc.caveat}</span> {fc.available === false && <b className="text-warn">{fc.reason}</b>}</div>}
+      {d.forecast_observation_mismatch && <div className="rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn"><b>Forecast ≠ track.</b> {d.forecast_observation_mismatch}</div>}
+      {fc.caveat && <details className="more glass rounded-2xl px-5 py-3"><summary>About this forecast</summary>
+        <div className="pb-1 pt-2 text-[11.5px] leading-relaxed text-dim">{fc.caveat} {fc.available === false && <b className="text-warn">{fc.reason}</b>}</div></details>}
 
+      <Tabs tabs={[["decision", "Decision"], ["conditions", "Conditions"], ["forecast", "Forecast"]] as [string, string][]} value={tab} onChange={setTab} />
+      {tab === "decision" && (<div className="page-in space-y-5">
       <Panel title="Scenario engine" tags={["ASSUMPTION"]}
         right={<>{wi ? <button className="btn" onClick={() => setWi(null)}>Back to forecast-driven view</button> : <span>Showing the forecast-driven evaluation</span>}{busy && <span className="animate-pulse text-faint">recalculating…</span>}</>}
         note="Pick a what-if or define your own. The scenario is recalculated automatically whenever the lap, focus driver, stored data or the track rain sensor changes.">
@@ -60,7 +62,7 @@ export default function Weather() {
               <div key={g}><div className="mb-1 text-[10px] font-semibold uppercase tracking-[.12em] text-faint">{g}</div>
                 <div className="flex flex-col gap-1.5">{PRESETS.filter((p) => p.group === g).map((p) => <button key={p.key} className={`btn text-left ${wi === p.what_if ? "!border-f1" : ""}`} onClick={() => setWi(p.what_if)}>{p.label}</button>)}</div></div>))}
           </div>
-          <div className="rounded border border-line bg-panel2 p-2.5 text-xs">
+          <div className="rounded-xl border border-line bg-panel2 p-2.5 text-xs">
             <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[.12em] text-faint">Custom rain</div>
             <div className="grid grid-cols-3 gap-2">
               <label className="flex flex-col gap-1 text-faint">Starts in (min)<input type="number" min={0} max={90} value={custom.rain_in_min} onChange={(e) => setCustom({ ...custom, rain_in_min: Number(e.target.value) })} /></label>
@@ -75,12 +77,12 @@ export default function Weather() {
 
       <Panel title={`Adaptive recommendation — ${d.focus_code ?? "—"}, lap ${d.lap}/${d.total_laps}${d.scenario_type ? ` · Scenario ${d.scenario_type[0]}` : ""}`} tags={d.what_if ? ["ASSUMPTION", "MODEL"] : ["FORECAST", "MODEL"]}>
         {rec ? (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
             <div className="space-y-3">
               <p className="text-[13px] leading-relaxed">{rec.text}</p>
               <div className="grid gap-2 sm:grid-cols-2">
-                <div className="rounded border border-good/40 bg-[#101a13] px-3 py-2"><div className="text-[10px] uppercase tracking-[.12em] text-good">Recommended action</div><div className="mt-0.5 text-sm font-semibold">{rec.recommended}</div></div>
-                <div className="rounded border border-line bg-panel2 px-3 py-2"><div className="text-[10px] uppercase tracking-[.12em] text-faint">Alternative</div><div className="mt-0.5 text-sm">{rec.alternative}</div></div>
+                <div className="rounded-xl border border-good/40 bg-good/10 px-3 py-2"><div className="text-[10px] uppercase tracking-[.12em] text-good">Recommended action</div><div className="mt-0.5 text-sm font-semibold">{rec.recommended}</div></div>
+                <div className="rounded-xl border border-line bg-panel2 px-3 py-2"><div className="text-[10px] uppercase tracking-[.12em] text-faint">Alternative</div><div className="mt-0.5 text-sm">{rec.alternative}</div></div>
               </div>
               <div className="num flex flex-wrap gap-x-6 gap-y-1 text-xs text-dim">
                 {rec.expected_gain_s !== undefined && <span>Expected gain vs alternative: <b className="text-ink">{rec.expected_gain_s > 0 ? "+" : ""}{rec.expected_gain_s} s</b> · <b className="text-ink">{rec.expected_gain_positions > 0 ? "+" : ""}{rec.expected_gain_positions}</b> positions</span>}
@@ -101,15 +103,16 @@ export default function Weather() {
       </Panel>
 
       {d.options?.length > 0 && (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
           <Panel title="Decision comparison" tags={["MODEL"]} pad={false} note={`${d.options[0].n_sims} simulated races per option with identical random futures; rivals switch tyres one lap after the crossover. ± is 1.96 simulation standard errors.`}>
             <OptionTable options={d.options} best={best} />
           </Panel>
           <Panel title="Finishing-position distribution" tags={["MODEL"]} note="First four options shown."><PositionDist options={d.options} /></Panel>
         </div>
       )}
-
-      <div className="grid gap-4 xl:grid-cols-3">
+      </div>)}
+      {tab === "conditions" && (<div className="page-in space-y-5">
+      <div className="grid gap-5 xl:grid-cols-3">
         <Panel title="Track weather this session" tags={["OBSERVED"]} note="OpenF1 track-side station, about one reading per minute. Rain is an on/off sensor.">
           <ResponsiveContainer width="100%" height={210}>
             <LineChart data={d.series} margin={{ top: 6, right: 8, bottom: 0, left: -22 }}>
@@ -117,7 +120,7 @@ export default function Weather() {
               <Tooltip content={<ChartTip title={(l: number) => `${hm(l)} UTC`} fmt={(v: number) => `${v}°C`} />} /><Legend iconType="plainline" />
               <Line dataKey="track" name="Track" stroke={SERIES[1]} strokeWidth={2} dot={false} isAnimationActive={false} /><Line dataKey="air" name="Air" stroke={SERIES[0]} strokeWidth={2} dot={false} isAnimationActive={false} />
             </LineChart></ResponsiveContainer>
-          <div className="mt-2 flex h-3 w-full overflow-hidden rounded-sm bg-[#1c1f25]" title="Rain sensor timeline">{d.series.map((x: any, i: number) => <div key={i} className="h-3 flex-1" style={{ background: x.rain ? "#3d8bf2" : "transparent" }} />)}</div>
+          <div className="mt-2 flex h-3 w-full overflow-hidden rounded-sm bg-white/[0.08]" title="Rain sensor timeline">{d.series.map((x: any, i: number) => <div key={i} className="h-3 flex-1" style={{ background: x.rain ? "#3d8bf2" : "transparent" }} />)}</div>
           <div className="mt-1 text-[10px] text-faint">Rain sensor timeline (blue = rain reported)</div>
         </Panel>
         <Panel title="Modelled track wetness — remaining laps" tags={["MODEL", "ASSUMPTION"]} note="Wetness 0–1 from the rain timeline (forecast or scenario). Dashed lines: slick→intermediate and intermediate→wet crossovers.">
@@ -139,8 +142,9 @@ export default function Weather() {
             </LineChart></ResponsiveContainer>
         </Panel>
       </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
+      </div>)}
+      {tab === "forecast" && (<div className="page-in space-y-5">
+      <div className="grid gap-5 xl:grid-cols-2">
         <Panel title="Open-Meteo — session window" tags={["FORECAST"]} pad={false} note={fc.available ? `${fc.source}. Retrieved ${dt(fc.retrieved)}.` : fc.reason}>
           <div className="max-h-[260px] overflow-auto"><table className="grid-t"><thead><tr><th>UTC</th><th className="r">Precip (mm/15 min)</th><th className="r">Probability</th><th className="r">Temp</th><th className="r">Wind</th><th className="r">Gusts</th><th className="r">Dir</th></tr></thead>
             <tbody>{(fc.rows || []).map((x: any) => <tr key={x.t}><td className="num">{hm(x.t)}</td><td className="r num" style={x.precip_mm_15 > 0 ? { color: "#3d8bf2" } : undefined}>{num(x.precip_mm_15, 2)}</td><td className="r num">{x.precip_prob ?? "—"}%</td><td className="r num">{num(x.temp)}°</td><td className="r num">{num(x.wind)} m/s</td><td className="r num">{num(x.gusts)}</td><td className="r num">{num(x.wind_dir, 0)}°</td></tr>)}</tbody></table></div>
@@ -153,6 +157,7 @@ export default function Weather() {
           </State>
         </Panel>
       </div>
+      </div>)}
       <Notes title="Assumptions & limits" items={d.assumptions} />
     </div>
   );

@@ -4,18 +4,21 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useRace } from "@/lib/api";
 
-const NAV = [
-  ["/", "Race Command Centre"], ["/telemetry", "Live Timing & Telemetry"], ["/predictor", "AI Race Predictor"],
-  ["/strategy", "Pit Stop & Tyre Strategy"], ["/weather", "Weather Intelligence"], ["/lab", "Race Simulation Lab"],
-  ["/history", "Historical Race Intelligence"], ["/analytics", "Driver & Constructor Analytics"],
-  ["/advisor", "AI Strategic Recommendations"], ["/data", "Data Sources & Model Performance"],
+const NAV: [string, string, string][] = [
+  ["/", "Command Centre", "Race"], ["/telemetry", "Timing & Telemetry", "Race"], ["/predictor", "Race Predictor", "Race"],
+  ["/strategy", "Pit & Tyre Strategy", "Decide"], ["/weather", "Weather Intelligence", "Decide"], ["/lab", "Simulation Lab", "Decide"], ["/advisor", "Recommendations", "Decide"],
+  ["/history", "Race History", "Explore"], ["/analytics", "Drivers & Teams", "Explore"], ["/data", "Data & Models", "Explore"],
 ];
-const MODE: Record<string, string> = { LIVE: "bg-good text-black", DELAYED: "bg-warn text-black", HISTORICAL: "bg-[#2a2e36] text-ink" };
+const MODE: Record<string, [string, string]> = { LIVE: ["#2fbf71", "Live"], DELAYED: ["#e0a100", "Delayed"], HISTORICAL: ["#9aa1ae", "Historical"] };
 const STATUS: Record<string, [string, string]> = {
-  GREEN: ["GREEN", "text-good border-good/40"], SC: ["SAFETY CAR", "text-warn border-warn/50"], SC_ENDING: ["SC IN THIS LAP", "text-warn border-warn/50"],
-  VSC: ["VIRTUAL SC", "text-warn border-warn/50"], RED: ["RED FLAG", "text-bad border-bad/50"], FINISHED: ["CHEQUERED", "text-ink border-line"],
-  UNKNOWN: ["NO DATA", "text-faint border-line"],
+  GREEN: ["Green flag", "#2fbf71"], SC: ["Safety Car", "#e0a100"], SC_ENDING: ["SC in this lap", "#e0a100"], VSC: ["Virtual SC", "#e0a100"],
+  RED: ["Red flag", "#ff5a52"], FINISHED: ["Chequered", "#f2f3f5"], UNKNOWN: ["No data", "#7c8290"],
 };
+
+function Pill({ colour, children, title }: { colour: string; children: React.ReactNode; title?: string }) {
+  return <span title={title} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium" style={{ color: colour }}>
+    <span className="h-1.5 w-1.5 rounded-full" style={{ background: colour, boxShadow: `0 0 8px ${colour}` }} />{children}</span>;
+}
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
@@ -34,65 +37,72 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     }, 2500);
     return () => clearInterval(t);
   }, [playing, maxLap]); // eslint-disable-line
-  const mode = cmd?.mode?.mode || "HISTORICAL";
+  const mode = MODE[cmd?.mode?.mode || "HISTORICAL"];
   const st = STATUS[cmd?.track_status || "UNKNOWN"] || STATUS.UNKNOWN;
   const replaying = r.lap !== null && r.lap < maxLap;
+  const groups = ["Race", "Decide", "Explore"];
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col border-r border-line bg-[#0d0e11] md:flex">
-        <div className="border-b border-line px-4 py-4">
-          <div className="flex items-center gap-2"><span className="h-5 w-1.5 -skew-x-12 bg-f1" /><span className="text-[15px] font-bold tracking-[.18em]">APEX</span></div>
-          <div className="mt-0.5 text-[10px] uppercase tracking-[.2em] text-faint">F1 Intelligence</div>
-        </div>
-        <nav className="flex-1 overflow-y-auto py-2">
-          {NAV.map(([href, label], i) => {
-            const on = path === href;
-            return (
-              <Link key={href} href={href} className={`flex items-center gap-3 border-l-2 px-4 py-2 text-[12.5px] transition-colors ${on ? "border-f1 bg-panel text-ink" : "border-transparent text-dim hover:bg-panel hover:text-ink"}`}>
-                <span className="num w-4 text-[10px] text-faint">{String(i + 1).padStart(2, "0")}</span>{label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="border-t border-line px-4 py-3 text-[10px] leading-relaxed text-faint">
-          Feed socket: <span className={r.wsState === "open" ? "text-good" : "text-dim"}>{r.wsState}</span><br />
-          Data: OpenF1 · F1DB · Jolpica · Open-Meteo
+      <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 p-3 lg:block">
+        <div className="glass-strong flex h-full flex-col rounded-3xl">
+          <div className="px-5 pb-4 pt-5">
+            <div className="flex items-center gap-2.5"><span className="h-5 w-1.5 -skew-x-12 rounded-sm bg-f1 shadow-[0_0_14px_rgba(225,6,0,.8)]" /><span className="text-[16px] font-bold tracking-[.2em]">APEX</span></div>
+            <div className="mt-1 text-[10px] uppercase tracking-[.22em] text-faint">F1 Intelligence</div>
+          </div>
+          <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-3">
+            {groups.map((g) => (
+              <div key={g}>
+                <div className="px-3 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[.18em] text-faint">{g}</div>
+                {NAV.filter((n) => n[2] === g).map(([href, label]) => {
+                  const on = path === href;
+                  return (
+                    <Link key={href} href={href} aria-current={on ? "page" : undefined}
+                      className={`group relative flex items-center rounded-xl px-3 py-2 text-[13px] transition-all duration-150 ${on ? "bg-white/[0.10] font-medium text-ink shadow-[inset_0_1px_0_rgba(255,255,255,.08)]" : "text-dim hover:bg-white/[0.05] hover:text-ink"}`}>
+                      <span className={`mr-2.5 h-1.5 w-1.5 rounded-full transition-all ${on ? "bg-f1 shadow-[0_0_8px_rgba(225,6,0,.9)]" : "bg-white/15 group-hover:bg-white/40"}`} />{label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+          <div className="border-t border-line px-5 py-3.5 text-[10.5px] leading-relaxed text-faint">
+            <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full" style={{ background: r.wsState === "open" ? "#2fbf71" : "#7c8290" }} />Feed {r.wsState === "open" ? "connected" : r.wsState}</span>
+            <div className="mt-0.5">OpenF1 · F1DB · Jolpica · Open-Meteo</div>
+          </div>
         </div>
       </aside>
+
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 border-b border-line bg-[#0d0e11]/95 backdrop-blur">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
-            <select className="md:hidden" value={path} onChange={(e) => (location.href = e.target.value)} aria-label="Section">
-              {NAV.map(([h, l]) => <option key={h} value={h}>{l}</option>)}
-            </select>
-            <span className={`rounded px-2 py-0.5 text-[10px] font-bold tracking-[.14em] ${MODE[mode]}`} title={cmd?.mode?.reason}>{mode}</span>
-            <select value={r.sessionKey ?? ""} onChange={(e) => r.setSessionKey(Number(e.target.value))} aria-label="Race" className="max-w-[230px]">
-              {r.sessions.map((s) => <option key={s.session_key} value={s.session_key}>{s.year} · {s.location} ({s.circuit_short_name})</option>)}
-            </select>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-[.12em] text-faint">As of lap</span>
-              <input type="range" min={1} max={Math.max(1, maxLap)} value={lap} onChange={(e) => { setPlaying(false); r.setLap(Number(e.target.value) >= maxLap ? null : Number(e.target.value)); }}
-                className="w-40 lg:w-64" aria-label="As-of lap" />
-              <span className="num w-14 text-sm font-semibold">{lap}<span className="text-faint">/{cmd?.total_laps ?? "—"}</span></span>
-              <button className="btn" onClick={() => { if (!playing && lap >= maxLap) r.setLap(1); setPlaying(!playing); }}>{playing ? "Pause" : "Replay ▶"}</button>
-              <button className="btn" disabled={!replaying} onClick={() => { setPlaying(false); r.setLap(null); }}>Latest</button>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-[.12em] text-faint">Focus</span>
-              <select value={r.driver ?? ""} onChange={(e) => r.setDriver(Number(e.target.value))} aria-label="Focus driver">
-                {(cmd?.rows || []).map((d: any) => <option key={d.driver_number} value={d.driver_number}>P{d.position} {d.code} · {d.team}</option>)}
+        <header className="sticky top-0 z-20 px-3 pt-3 lg:pl-0 lg:pr-4">
+          <div className="glass-strong rounded-2xl">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 px-4 py-2.5">
+              <select className="lg:hidden" value={path} onChange={(e) => (location.href = e.target.value)} aria-label="Section">
+                {NAV.map(([h, l]) => <option key={h} value={h}>{l}</option>)}
               </select>
+              <select value={r.sessionKey ?? ""} onChange={(e) => r.setSessionKey(Number(e.target.value))} aria-label="Race" className="max-w-[220px] font-medium">
+                {r.sessions.map((s) => <option key={s.session_key} value={s.session_key}>{s.year} · {s.location}</option>)}
+              </select>
+              <div className="flex items-center gap-2.5 rounded-full border border-line bg-white/[0.04] py-1 pl-3.5 pr-1">
+                <span className="text-[10px] font-medium uppercase tracking-[.12em] text-faint">Lap</span>
+                <input type="range" min={1} max={Math.max(1, maxLap)} value={lap} onChange={(e) => { setPlaying(false); r.setLap(Number(e.target.value) >= maxLap ? null : Number(e.target.value)); }}
+                  className="w-32 xl:w-56" aria-label="As-of lap" />
+                <span className="num w-12 text-right text-[13px] font-semibold">{lap}<span className="text-faint">/{cmd?.total_laps ?? "—"}</span></span>
+                <button className="btn !px-3 !py-1" onClick={() => { if (!playing && lap >= maxLap) r.setLap(1); setPlaying(!playing); }} title="Replay the race lap by lap">{playing ? "Pause" : "▶ Replay"}</button>
+                {replaying && <button className="btn !px-3 !py-1" onClick={() => { setPlaying(false); r.setLap(null); }}>Latest</button>}
+              </div>
+              <select value={r.driver ?? ""} onChange={(e) => r.setDriver(Number(e.target.value))} aria-label="Focus driver" title="Focus driver for strategy, weather and recommendations">
+                {(cmd?.rows || []).map((d: any) => <option key={d.driver_number} value={d.driver_number}>P{d.position} · {d.code}</option>)}
+              </select>
+              <div className="ml-auto flex items-center gap-2">
+                {replaying && <Pill colour="#b79cf0" title={`Every module shows only what was known at the end of lap ${lap}.`}>Replay · lap {lap}</Pill>}
+                <Pill colour={mode[0]} title={cmd?.mode?.reason}>{mode[1]}</Pill>
+                <Pill colour={st[1]}>{st[0]}</Pill>
+              </div>
             </div>
-            <span className={`ml-auto rounded border px-2 py-0.5 text-[10px] font-bold tracking-[.14em] ${st[1]}`}>{st[0]}</span>
+            {r.alert && <div className="flex items-center gap-3 rounded-b-2xl border-t border-warn/30 bg-warn/10 px-4 py-2 text-xs text-warn">{r.alert}<button className="btn ml-auto !py-1" onClick={r.clearAlert}>Dismiss</button></div>}
           </div>
-          {(mode !== "LIVE" || replaying) && (
-            <div className="border-t border-line bg-[#101216] px-4 py-1 text-[11px] text-dim">
-              {replaying ? <>REPLAY — every module shows only what was known at the end of lap {lap}. </> : null}{cmd?.mode?.reason}
-            </div>
-          )}
-          {r.alert && <div className="flex items-center gap-3 border-t border-warn/40 bg-[#211a08] px-4 py-1.5 text-xs text-warn">{r.alert}<button className="btn ml-auto" onClick={r.clearAlert}>Dismiss</button></div>}
         </header>
-        <main className="mx-auto max-w-[1700px] p-4">{children}</main>
+        <main key={path} className="page-in mx-auto max-w-[1560px] px-3 pb-10 pt-5 lg:pl-0 lg:pr-4">{children}</main>
       </div>
     </div>
   );

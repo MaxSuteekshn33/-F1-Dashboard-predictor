@@ -1,5 +1,5 @@
 # runtime data (rebuilt by `make bootstrap`): database, downloads, trained models, caches
-data/
+/data/
 backend/.venv/
 backend/**/__pycache__/
 backend/.pytest_cache/

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useApi, useRace } from "@/lib/api";
-import { COMPOUND, ChartTip, Driver, GRID, Notes, Panel, SERIES, State, Stat, Tag, Tyre, fmtLap, num, teamColour } from "@/components/ui";
+import { COMPOUND, ChartTip, Driver, GRID, Notes, Panel, SERIES, State, Stat, Tag, Tyre, fmtLap, num, teamColour, Tabs } from "@/components/ui";
 
 const SECTOR = ["#3987e5", "#c98500", "#199e70"];
 
@@ -21,7 +21,7 @@ function TrackMap({ data, focus }: { data: any; focus: number | null }) {
       <circle cx={X(pts[0][0])} cy={Y(pts[0][1])} r={4} fill="#f2f3f5" /><text x={X(pts[0][0]) + 7} y={Y(pts[0][1]) - 6} fontSize={9} fill="#a3a8b3">S/F</text>
       {data.cars.map((c: any) => (
         <g key={c.driver_number}>
-          <circle cx={X(c.x)} cy={Y(c.y)} r={c.driver_number === focus ? 7 : 5} fill={teamColour(c.team_colour)} stroke="#0a0b0d" strokeWidth={2} />
+          <circle cx={X(c.x)} cy={Y(c.y)} r={c.driver_number === focus ? 7 : 5} fill={teamColour(c.team_colour)} stroke="#0b0c10" strokeWidth={2} />
           <text x={X(c.x) + 8} y={Y(c.y) + 3} fontSize={c.driver_number === focus ? 11 : 9} fontWeight={c.driver_number === focus ? 700 : 500} fill="#f2f3f5">{c.code}</text>
         </g>
       ))}
@@ -48,6 +48,7 @@ function Trace({ pts, ch, title, traces, unit, domain, h = 130 }: any) {
 
 export default function Telemetry() {
   const r = useRace();
+  const [tab, setTab] = useState("track");
   const { data: laps, error: lapErr } = useApi<any>(r.sessionKey ? `/api/telemetry/laps?${r.q}` : null, r.tick);
   const { data: map, loading: mapLoading, error: mapErr } = useApi<any>(r.sessionKey ? `/api/telemetry/track?${r.q}` : null, r.tick);
   const { data: pace } = useApi<any>(r.sessionKey ? `/api/telemetry/pace?${r.q}` : null, r.tick);
@@ -84,8 +85,10 @@ export default function Telemetry() {
   const B = sel.d2 && sel.d2 !== sel.d1 ? byNum[sel.d2] : null;
   const lapOpts = (d?: any) => (d?.laps || []).filter((x: any) => x.t).map((x: any) => <option key={x.lap} value={x.lap}>L{x.lap} · {fmtLap(x.t)} · {x.compound?.[0] || "?"}{x.pit ? " · pit" : ""}</option>);
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+    <div className="space-y-5">
+      <Tabs tabs={[["track", "Track & sectors"], ["telemetry", "Telemetry"], ["pace", "Laps & pace"]] as [string, string][]} value={tab} onChange={setTab} />
+      {tab === "track" && (<div className="page-in space-y-5">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <Panel title="Circuit map & car positions" tags={["OBSERVED"]} note={map?.available ? <>Outline drawn from car #{map.outline_ref}. Sectors: <span style={{ color: SECTOR[0] }}>S1</span> · <span style={{ color: SECTOR[1] }}>S2</span> · <span style={{ color: SECTOR[2] }}>S3</span>. Positions at the end of lap {map.lap}. {map.limitations?.[0]}</> : undefined}>
           <State loading={mapLoading} error={mapErr} empty={map && !map.available ? map.reason : null}>{map?.available && <TrackMap data={map} focus={r.driver} />}</State>
           {map?.note && <div className="mt-2 text-[11px] text-warn">{map.note}</div>}
@@ -102,7 +105,8 @@ export default function Telemetry() {
           </State>
         </Panel>
       </div>
-
+      </div>)}
+      {tab === "telemetry" && (<div className="page-in space-y-5">
       <Panel title="Telemetry comparison" tags={["OBSERVED"]}
         right={<>
           <span className="text-faint">Presets:</span>
@@ -126,7 +130,7 @@ export default function Telemetry() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {tel.traces.map((t: any, i: number) => (
-                  <div key={t.key} className="col-span-2 rounded-md border border-line bg-panel2 px-3 py-2">
+                  <div key={t.key} className="col-span-2 rounded-2xl border border-line bg-panel2 px-3 py-2">
                     <div className="flex items-center gap-2 text-xs"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: SERIES[i] }} /><b>{t.code}</b><span className="text-dim">lap {t.lap}</span><span className="num ml-auto text-sm font-semibold">{fmtLap(t.lap_time)}</span></div>
                     <div className="num mt-1 grid grid-cols-3 gap-x-3 text-[11px] text-dim xl:grid-cols-6">
                       <span>Top {t.top_speed} km/h</span><span>Full thr. {t.full_throttle_pct}%</span><span>Braking {t.brake_pct}%</span><span>{t.gear_changes} shifts</span><span>Max {t.max_rpm} rpm</span><span>DRS {t.drs_pct}%</span>
@@ -160,8 +164,9 @@ export default function Telemetry() {
           )}
         </State>
       </Panel>
-
-      <div className="grid gap-4 xl:grid-cols-2">
+      </div>)}
+      {tab === "pace" && (<div className="page-in space-y-5">
+      <div className="grid gap-5 xl:grid-cols-2">
         <Panel title="Lap progression (green-flag laps)" tags={["OBSERVED"]}>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={lapSeries} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
@@ -186,7 +191,7 @@ export default function Telemetry() {
         </Panel>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-5 xl:grid-cols-3">
         <Panel title="Race pace by compound" tags={["OBSERVED"]} pad={false} className="xl:col-span-1">
           <div className="max-h-[340px] overflow-auto"><table className="grid-t"><thead><tr><th>Driver</th><th>Tyre</th><th className="r">Laps</th><th className="r">Median</th><th className="r">Best</th></tr></thead>
             <tbody>{(pace?.by_compound || []).map((x: any, i: number) => <tr key={i}><td><Driver code={x.code} colour={x.team_colour} /></td><td><Tyre compound={x.compound} /></td><td className="r num">{x.laps}</td><td className="r num">{fmtLap(x.median)}</td><td className="r num text-dim">{fmtLap(x.best)}</td></tr>)}</tbody></table></div>
@@ -201,6 +206,7 @@ export default function Telemetry() {
               <td className="r num">{x.race_pace_delta > 0 ? "+" : ""}{x.race_pace_delta.toFixed(3)}</td><td className="r num text-dim">{x.quali_delta === null ? "—" : `${x.quali_delta > 0 ? "+" : ""}${x.quali_delta.toFixed(3)}`}</td></tr>)}</tbody></table>
         </Panel>
       </div>
+      </div>)}
       <Notes title="Not available from the sources" items={["Driver performance across different circuits is shown under Driver & Constructor Analytics and Historical Race Intelligence (results-level).",
         "Live GPS positions during a session require OpenF1 real-time access; without it the map shows the most recent stored positions and the header reads DELAYED or HISTORICAL."]} />
     </div>

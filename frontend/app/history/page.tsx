@@ -2,10 +2,11 @@
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useApi, useRace } from "@/lib/api";
-import { ChartTip, GRID, Notes, Panel, SERIES, State, Tag, num, pct, teamColour } from "@/components/ui";
+import { ChartTip, GRID, Notes, Panel, SERIES, State, Tag, num, pct, teamColour, Tabs } from "@/components/ui";
 
 export default function History() {
   const r = useRace();
+  const [tab, setTab] = useState("similar");
   const ov = useApi<any>("/api/history/overview");
   const [year, setYear] = useState<number | null>(null);
   const [circuit, setCircuit] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export default function History() {
   const sr = useApi<any>(query.length >= 2 ? `/api/history/search?q=${encodeURIComponent(query)}` : null);
   const s = sim.data;
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Panel title="Search the database" tags={["OBSERVED"]} right={ov.data && <span>{ov.data.coverage.races} races · {ov.data.coverage.first}–{ov.data.coverage.last} · {ov.data.openf1_races} with lap-level data</span>}>
         <input type="text" className="w-full max-w-xl" placeholder="Driver, constructor, circuit or Grand Prix…" value={text} onChange={(e) => setText(e.target.value)} aria-label="Search" />
         {sr.data && (
@@ -35,6 +36,8 @@ export default function History() {
         )}
       </Panel>
 
+      <Tabs tabs={[["similar", "Similar races"], ["seasons", "Seasons & circuits"]] as [string, string][]} value={tab} onChange={setTab} />
+      {tab === "similar" && (<div className="page-in space-y-5">
       <Panel title={`Races resembling the current conditions${s?.lap ? ` (as of lap ${s.lap})` : ""}`} tags={["OBSERVED", "HISTORICAL"]} pad={false} note={s?.available ? <>{s.method} <b className="text-dim">{s.caveat}</b></> : undefined}>
         <State loading={sim.loading} error={sim.error} empty={s && !s.available ? s.reason : null}>
           {s?.available && (<>
@@ -49,8 +52,9 @@ export default function History() {
           </>)}
         </State>
       </Panel>
-
-      <div className="grid gap-4 xl:grid-cols-2">
+      </div>)}
+      {tab === "seasons" && (<div className="page-in space-y-5">
+      <div className="grid gap-5 xl:grid-cols-2">
         <Panel title="Season" tags={["OBSERVED"]} pad={false} right={<select value={year ?? ""} onChange={(e) => setYear(Number(e.target.value))} aria-label="Season">{(ov.data?.seasons || []).map((y: number) => <option key={y}>{y}</option>)}</select>}>
           <State loading={se.loading} error={se.error}>
             {se.data && (<>
@@ -86,7 +90,7 @@ export default function History() {
           </State>
         </Panel>
       </div>
-
+      </div>)}
       {driver && (
         <Panel title={`Driver — ${dr.data?.driver?.name ?? driver}`} tags={["OBSERVED"]} pad={false} right={<button className="btn" onClick={() => setDriver(null)}>Close</button>}>
           <State loading={dr.loading} error={dr.error}>

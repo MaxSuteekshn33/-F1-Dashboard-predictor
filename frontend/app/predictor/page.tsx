@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Bar as RBar, BarChart, CartesianGrid, Cell, ErrorBar, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useApi, useRace } from "@/lib/api";
-import { Bar, ChartTip, Driver, GRID, Notes, Panel, State, Tag, Tyre, num, pct, signed, teamColour } from "@/components/ui";
+import { Bar, ChartTip, Driver, GRID, Notes, Panel, State, Tabs, Tag, Tyre, num, pct, signed, teamColour } from "@/components/ui";
 
 function Explain({ items }: { items: any[] }) {
   if (!items?.length) return <span className="text-faint">—</span>;
@@ -12,7 +12,7 @@ function Explain({ items }: { items: any[] }) {
       {items.map((x, i) => (
         <div key={i} className="grid grid-cols-[minmax(0,1fr)_90px_44px] items-center gap-2 text-[11px]">
           <span className="truncate text-dim" title={x.label}>{x.label}{x.value !== null && <span className="num text-faint"> = {x.value}</span>}</span>
-          <div className="relative h-2 rounded-sm bg-[#1c1f25]">
+          <div className="relative h-2 rounded-sm bg-white/[0.08]">
             <div className="absolute top-0 h-2 rounded-sm" style={{ left: x.shap >= 0 ? "50%" : `${50 - (Math.abs(x.shap) / max) * 50}%`, width: `${(Math.abs(x.shap) / max) * 50}%`, background: x.shap >= 0 ? "#3987e5" : "#d95926" }} />
             <div className="absolute left-1/2 top-[-2px] h-3 w-px bg-faint" />
           </div>
@@ -50,22 +50,17 @@ export default function Predictor() {
   const { data: ir, loading: irL, error: irE } = useApi<any>(tab === "inrace" && r.sessionKey ? `/api/predict/inrace?${r.q}` : null, r.tick);
   const { data: pr, loading: prL, error: prE } = useApi<any>(tab === "prerace" ? `/api/predict/prerace${which === "selected" && raceId ? `?race_id=${raceId}` : ""}` : null, r.tick);
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <button className={`btn ${tab === "inrace" ? "primary" : ""}`} onClick={() => setTab("inrace")}>In-race (as of lap {r.lap ?? r.cmd?.max_lap ?? "—"})</button>
-        <button className={`btn ${tab === "prerace" ? "primary" : ""}`} onClick={() => setTab("prerace")}>Pre-race</button>
-        {tab === "prerace" && <>
-          <span className="ml-3 text-xs text-faint">Race:</span>
-          <button className={`btn ${which === "next" ? "!border-dim" : ""}`} onClick={() => setWhich("next")}>Next Grand Prix</button>
-          <button className={`btn ${which === "selected" ? "!border-dim" : ""}`} onClick={() => setWhich("selected")} disabled={!raceId}>Selected race (backtest view)</button>
-        </>}
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <Tabs tabs={[["inrace", "During the race"], ["prerace", "Before the race"]]} value={tab} onChange={(v) => setTab(v as any)} />
+        {tab === "prerace" && <Tabs tabs={[["next", "Next Grand Prix"], ["selected", "Selected race (backtest)"]]} value={which} onChange={(v) => setWhich(v === "selected" && raceId ? "selected" : "next")} />}
       </div>
 
       {tab === "inrace" && (
         <State loading={irL} error={irE} empty={ir && !ir.available ? ir.reason : null}>
           {ir?.available && (
-            <div className="space-y-4">
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+            <div className="space-y-5">
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
                 <Panel title={`Five most likely winners — lap ${ir.lap}/${ir.total_laps}`} tags={["MODEL"]} note="Whiskers: range between the ML model and the Monte Carlo simulation ± 1.96 simulation standard errors (a model-disagreement range, not a frequentist interval).">
                   <TopFive rows={ir.top5} colourKey="team_colour" ci={(d) => [d.range_lo, d.range_hi]} />
                 </Panel>
@@ -90,7 +85,7 @@ export default function Predictor() {
                       <td className="r num">{pct(d.p_podium)}</td><td className="r num">{pct(d.p_top5)}</td><td className="r num font-semibold">{d.pred_pos ? `P${d.pred_pos}` : "—"}</td>
                       <td className="r num text-dim">P{d.pos_p10}–P{d.pos_p90}</td><td className="r num">{num(d.exp_points)}</td><td className="r num text-dim">{pct(d.p_dnf, 0)}</td>
                     </tr>
-                    {open === d.driver_number && <tr key={`${d.driver_number}x`}><td colSpan={14} className="!bg-panel2"><div className="max-w-xl py-1"><Explain items={d.explain} /></div></td></tr>}
+                    {open === d.driver_number && <tr key={`${d.driver_number}x`}><td colSpan={14} className="!bg-white/[0.04]"><div className="max-w-xl py-1"><Explain items={d.explain} /></div></td></tr>}
                   </>))}</tbody>
                 </table></div>
               </Panel>
@@ -102,13 +97,13 @@ export default function Predictor() {
       {tab === "prerace" && (
         <State loading={prL} error={prE} empty={pr && !pr.available ? pr.reason : null}>
           {pr?.available && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="flex flex-wrap items-baseline gap-3">
                 <h1 className="text-xl font-semibold">{pr.race.year} {pr.race.gp_name}</h1>
                 <span className="text-xs text-dim">Round {pr.race.round} · {pr.race.circuit_name} · {pr.race.date}</span>
                 <span className="text-xs text-faint">Model: {pr.variant === "pre_race" ? "post-qualifying (uses the grid)" : "pre-qualifying (no grid yet)"} · v{pr.model_version} · trained through {pr.train_through}</span>
               </div>
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
                 <Panel title="Five most likely winners" tags={["MODEL"]} note="Whiskers: 95% Wilson interval of how often drivers given a probability in this band actually won in the walk-forward backtest.">
                   <TopFive rows={pr.top5} colourKey="colour" ci={(d) => (d.ci ? [d.ci.lo, d.ci.hi] : null)} />
                 </Panel>
@@ -132,7 +127,7 @@ export default function Predictor() {
                       {pr.completed && <td className="r num" style={{ color: d.actual_pos === 1 ? "#2fbf71" : undefined }}>{d.actual_pos ? `P${d.actual_pos}` : d.actual_text}</td>}
                       <td className="r num">{num(d.exp_points)}</td><td className="r num text-dim">{num(d.points_before, 0)}</td><td className="r num">{num(d.projected_points)}</td><td className="r num text-dim">{signed(d.exp_points_vs_top)}</td>
                     </tr>
-                    {open === d.driver_id && <tr key={`${d.driver_id}x`}><td colSpan={14} className="!bg-panel2"><div className="grid max-w-3xl gap-4 py-1 md:grid-cols-2"><Explain items={d.explain} />
+                    {open === d.driver_id && <tr key={`${d.driver_id}x`}><td colSpan={14} className="!bg-white/[0.04]"><div className="grid max-w-3xl gap-4 py-1 md:grid-cols-2"><Explain items={d.explain} />
                       <div className="text-[11px] text-dim">Per-model win probability:<div className="num mt-1 grid grid-cols-2 gap-x-4">{Object.entries(d.model_spread || {}).map(([k, v]: any) => <span key={k}>{k}: {pct(v)}</span>)}</div></div></div></td></tr>}
                   </>))}</tbody>
                 </table></div>

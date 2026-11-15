@@ -922,7 +922,7 @@ def advisor(session_key: int, lap: int | None, driver: int | None) -> dict:
                              "title": "Pit window open" if in_window else f"Pit window opens on lap {w['open']}",
                              "situation": f"{me['code']} P{me['position']} on {me['compound'].lower()}s, {me['tyre_age']} laps old, {total - st['lap']} laps to go. "
                                           f"Optimiser's best plan: {best['name']} — next stop lap {nxt} ({best['plan'][0]['compound'].lower()}).",
-                             "supporting": [f"OBSERVED · tyre age {me['tyre_age']}, gap ahead {me['interval_s']} s",
+                             "supporting": [f"OBSERVED · tyre age {me['tyre_age']}, " + (f"gap ahead {me['interval_s']} s" if me["interval_s"] is not None and me["position"] > 1 else "leading the race"),
                                             f"MODEL · {me['compound'].lower()} wear {m['compounds'][me['compound']]['deg']:.3f} s/lap ({m['compounds'][me['compound']]['source']})",
                                             f"MODEL · pit loss {sv['pit_loss']['seconds']} s ({sv['pit_loss']['source']})",
                                             f"MODEL · pit now: expected P{now['exp_pos']:.1f}, {now['blocked_laps']} laps in traffic; pit lap {nxt}: expected P{opt['exp_pos']:.1f}, {opt['blocked_laps']} laps in traffic"],
