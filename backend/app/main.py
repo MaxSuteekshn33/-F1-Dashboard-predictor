@@ -27,14 +27,27 @@ async def lifespan(app: FastAPI):
         t.cancel()
 
 
+_last_request = {"t": 0.0}
+
+
 def _warm() -> None:
-    """Pre-compute the slow one-off pieces of the Next Race page right after start-up, so the first visitor
-    does not wait for them (the upcoming-race prediction and each driver's recent race pace)."""
+    """Pre-compute the slow one-off pieces of the Next Race page after start-up. It must never compete with a
+    visitor: the server usually starts *because* someone opened the site, so warming waits until no request
+    has arrived for 20 seconds, and backs off again if one arrives between its two steps."""
+    def wait_for_quiet(limit: float = 600.0) -> bool:
+        t0 = time.time()
+        while time.time() - t0 < limit:
+            if time.time() - _last_request["t"] > 20:
+                return True
+            time.sleep(2)
+        return False
     try:
-        with _slots:
-            nextrace.overview()
-        with _slots:
-            nextrace.recent_pace()
+        time.sleep(15)
+        for step in (nextrace.overview, nextrace.recent_pace):
+            if not wait_for_quiet():
+                return
+            with _slots:
+                step()
     except Exception as e:      # warming is best-effort; requests compute on demand if it fails
         print(f"[warm] skipped: {type(e).__name__}: {e}", flush=True)
 
@@ -50,6 +63,7 @@ _slots = threading.BoundedSemaphore(int(os.getenv("APEX_MAX_CONCURRENCY", "2")))
 def guard(fn, *a, light: bool = False, **k):
     """Run a service call. Heavy calls (models, simulations) take a slot so memory stays bounded; `light` calls
     (timing, lap tables, status) skip the queue, so the timing screen stays current while predictions catch up."""
+    _last_request["t"] = time.time()
     try:
         if light:
             return sv.clean(fn(*a, **k))
@@ -180,14 +194,25 @@ def weather_next():
     return guard(weather.next_race_forecast)
 
 
+@sv.state_cached("safetycar", ttl=600)
+def _safetycar_cached(session_key, lap=None, driver=None, body=None):
+    return sv.safety_car(session_key, lap, driver, body)
+
+
+@sv.state_cached("lab", ttl=600)
+def _lab_cached(session_key, lap=None, body=None):
+    return sv.lab(session_key, body)
+
+
 @app.post("/api/safetycar")
 def safetycar(body: dict = Body(...)):
-    return guard(sv.safety_car, body.get("session_key") or default_key(), body.get("lap"), body.get("driver"), body)
+    return guard(_safetycar_cached, body.get("session_key") or default_key(), body.get("lap"), body.get("driver"), body)
 
 
 @app.post("/api/sim/run")
 def sim_run(body: dict = Body(...)):
-    return guard(sv.lab, body.get("session_key") or default_key(), body)
+    # identical scenario sets are served from the cache; the simulation itself is unchanged (fixed seed, same run count)
+    return guard(_lab_cached, body.get("session_key") or default_key(), None, body)
 
 
 @app.get("/api/live")
