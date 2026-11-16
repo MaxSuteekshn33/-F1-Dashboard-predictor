@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useRace } from "@/lib/api";
+import { useActivity, useRace } from "@/lib/api";
 
 const NAV: [string, string, string][] = [
   ["/live", "Live Race", "Upcoming"], ["/next", "Next Race", "Upcoming"], ["/play", "Predictions & Leagues", "Upcoming"],
@@ -30,10 +30,21 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [playing, setPlaying] = useState(false);
   const lapRef = useRef(lap);
   lapRef.current = lap;
+  const working = useActivity();
+  const loadingRef = useRef(false);
+  loadingRef.current = r.cmdLoading;
+  // The slider moves instantly; the lap is committed once you stop for a moment, so passing over laps costs nothing.
+  const [drag, setDrag] = useState<number | null>(null);
+  const dragTimer = useRef<any>(null);
+  const commit = (v: number) => { clearTimeout(dragTimer.current); setDrag(null); r.setLap(v >= maxLap ? null : v); };
+  const onSlide = (v: number) => { setPlaying(false); setDrag(v); clearTimeout(dragTimer.current); dragTimer.current = setTimeout(() => commit(v), 350); };
+  useEffect(() => () => clearTimeout(dragTimer.current), []);
+  const shownLap = drag ?? lap;
   useEffect(() => {   // race replay: advance one lap every 2.5 s
     if (!playing) return;
     const t = setInterval(() => {
       if (lapRef.current >= maxLap) { setPlaying(false); return; }
+      if (loadingRef.current) return;                 // wait for the current lap to arrive before stepping on
       r.setLap(lapRef.current + 1);
     }, 2500);
     return () => clearInterval(t);
@@ -57,6 +68,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const groups = ["Upcoming", "Race", "Decide", "Explore"];
   return (
     <div className="flex min-h-screen">
+      <a href="#main" className="btn primary skip-link">Skip to content</a>
       <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 p-3 lg:block">
         <div className="glass-strong flex h-full flex-col rounded-3xl">
           <div className="px-5 pb-4 pt-5">
@@ -87,6 +99,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="min-w-0 flex-1">
+        <div aria-hidden className={`pointer-events-none fixed inset-x-0 top-0 z-50 h-[2px] overflow-hidden transition-opacity duration-300 ${working ? "opacity-100" : "opacity-0"}`}><div className="activity-bar h-full w-1/3 bg-gradient-to-r from-transparent via-[#ff3b30] to-transparent" /></div>
         <header className="sticky top-0 z-20 px-3 pt-3 lg:pl-0 lg:pr-4">
           <div className="glass-strong rounded-2xl">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 px-4 py-2.5">
@@ -99,37 +112,39 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                   <span>{path === "/play" ? "Make picks, score points, compare with friends. The race and lap controls return on the other sections." : "Predictions and a pre-race strategy lab. The race and lap controls return on the other sections."}</span>
                 </div>
               ) : (<>
-              <select value={r.sessionKey ?? ""} onChange={(e) => r.setSessionKey(Number(e.target.value))} aria-label="Race" className="max-w-[220px] font-medium">
-                {r.sessions.map((s) => <option key={s.session_key} value={s.session_key}>{s.year} · {s.location}</option>)}
-              </select>
-              <div className="flex items-center gap-2.5 rounded-full border border-line bg-white/[0.04] py-1 pl-3.5 pr-1">
-                <span className="text-[10px] font-medium uppercase tracking-[.12em] text-faint">Lap</span>
-                <input type="range" min={1} max={Math.max(1, maxLap)} value={lap} onChange={(e) => { setPlaying(false); r.setLap(Number(e.target.value) >= maxLap ? null : Number(e.target.value)); }}
-                  className="w-32 xl:w-56" aria-label="As-of lap" />
-                <span className="num w-12 text-right text-[13px] font-semibold">{lap}<span className="text-faint">/{cmd?.total_laps ?? "—"}</span></span>
-                <button className="btn !px-3 !py-1" onClick={() => { if (!playing && lap >= maxLap) r.setLap(1); setPlaying(!playing); }} title="Replay the race lap by lap">{playing ? "Pause" : "▶ Replay"}</button>
-                {replaying && <button className="btn !px-3 !py-1" onClick={() => { setPlaying(false); r.setLap(null); }}>Latest</button>}
+              <label className="flex min-w-0 items-center gap-2 text-[10px] font-medium uppercase tracking-[.12em] text-faint"><span className="hidden sm:inline">Race</span>
+                <select value={r.sessionKey ?? ""} onChange={(e) => r.setSessionKey(Number(e.target.value))} aria-label="Race" className="max-w-[210px] font-medium normal-case tracking-normal">
+                  {r.sessions.map((s) => <option key={s.session_key} value={s.session_key}>{s.year} · {s.location}</option>)}
+                </select></label>
+              <div className="flex min-w-0 flex-1 basis-full items-center gap-2 rounded-full border border-line bg-white/[0.04] py-1 pl-3.5 pr-1 sm:basis-[340px] xl:max-w-[520px]">
+                <span className="shrink-0 text-[10px] font-medium uppercase tracking-[.12em] text-faint">Lap</span>
+                <input type="range" min={1} max={Math.max(1, maxLap)} value={shownLap} onChange={(e) => onSlide(Number(e.target.value))}
+                  onPointerUp={() => { if (drag !== null) commit(drag); }} className="min-w-0 flex-1" aria-label="As-of lap" aria-valuetext={`Lap ${shownLap} of ${cmd?.total_laps ?? maxLap}`} />
+                <span className="num w-[52px] shrink-0 text-right text-[13px] font-semibold">{shownLap}<span className="text-faint">/{cmd?.total_laps ?? "—"}</span></span>
+                <button className="btn shrink-0 !min-h-[30px] !px-3 !py-1" aria-pressed={playing} onClick={() => { if (!playing && lap >= maxLap) r.setLap(1); setPlaying(!playing); }} title="Replay the race lap by lap">{playing ? "Pause" : "▶ Replay"}</button>
+                {replaying && <button className="btn quiet shrink-0 !min-h-[30px] !px-3 !py-1" onClick={() => { setPlaying(false); setDrag(null); r.setLap(null); }} title="Jump to the newest lap">Latest</button>}
               </div>
+              <label className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[.12em] text-faint" title="Driver used by the strategy, weather and recommendation pages">Driver
+                <select value={r.driver ?? ""} onChange={(e) => r.setDriver(Number(e.target.value))} aria-label="Focus driver" className="font-medium normal-case tracking-normal">
+                  {(cmd?.rows || []).map((d: any) => <option key={d.driver_number} value={d.driver_number}>{d.code} · P{d.position}{d.team ? ` · ${d.team}` : ""}</option>)}
+                </select></label>
               <label className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[.12em] text-faint" title="Which lap to show when you open another section">
-                <span className="hidden xl:inline">On page change</span>
+                <span className="hidden 2xl:inline">On page change</span><span className="2xl:hidden">Then</span>
                 <select value={onNav} onChange={(e) => chooseNav(e.target.value as any)} aria-label="Lap to show when changing section" className="normal-case tracking-normal">
                   <option value="latest">Latest lap</option><option value="first">Lap 1</option><option value="keep">Keep my lap</option>
                 </select>
               </label>
-              <select value={r.driver ?? ""} onChange={(e) => r.setDriver(Number(e.target.value))} aria-label="Focus driver" title="Focus driver for strategy, weather and recommendations">
-                {(cmd?.rows || []).map((d: any) => <option key={d.driver_number} value={d.driver_number}>P{d.position} · {d.code}</option>)}
-              </select>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
                 {replaying && <Pill colour="#b79cf0" title={`Every module shows only what was known at the end of lap ${lap}.`}>Replay · lap {lap}</Pill>}
                 <Pill colour={mode[0]} title={cmd?.mode?.reason}>{mode[1]}</Pill>
                 <Pill colour={st[1]}>{st[0]}</Pill>
               </div>
-                          </>)}
+              </>)}
             </div>
             {r.alert && <div className="flex items-center gap-3 rounded-b-2xl border-t border-warn/30 bg-warn/10 px-4 py-2 text-xs text-warn">{r.alert}<button className="btn ml-auto !py-1" onClick={r.clearAlert}>Dismiss</button></div>}
           </div>
         </header>
-        <main key={path} className="page-in mx-auto max-w-[1560px] px-3 pb-10 pt-5 lg:pl-0 lg:pr-4">{children}</main>
+        <main id="main" key={path} className="page-in mx-auto max-w-[1560px] px-3 pb-10 pt-5 lg:pl-0 lg:pr-4">{children}</main>
       </div>
     </div>
   );

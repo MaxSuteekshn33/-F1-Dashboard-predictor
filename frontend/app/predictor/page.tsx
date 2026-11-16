@@ -47,7 +47,7 @@ export default function Predictor() {
   const [open, setOpen] = useState<string | number | null>(null);
   const raceId = r.cmd?.f1db?.race_id;
   const [which, setWhich] = useState<"next" | "selected">("next");
-  const { data: ir, loading: irL, error: irE } = useApi<any>(tab === "inrace" && r.sessionKey ? `/api/predict/inrace?${r.q}` : null, r.tick);
+  const { data: ir, loading: irL, error: irE, stale: irS } = useApi<any>(tab === "inrace" && r.sessionKey ? `/api/predict/inrace?${r.q}` : null, r.tick);
   const { data: pr, loading: prL, error: prE } = useApi<any>(tab === "prerace" ? `/api/predict/prerace${which === "selected" && raceId ? `?race_id=${raceId}` : ""}` : null, r.tick);
   return (
     <div className="space-y-5">
@@ -59,7 +59,7 @@ export default function Predictor() {
       {tab === "inrace" && (
         <State loading={irL} error={irE} empty={ir && !ir.available ? ir.reason : null}>
           {ir?.available && (
-            <div className="space-y-5">
+            <div className={`space-y-5 ${irS ? "is-stale" : ""}`} aria-busy={irS}>
               <div className="grid gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
                 <Panel title={`Five most likely winners — lap ${ir.lap}/${ir.total_laps}`} tags={["MODEL"]} note="Whiskers: range between the ML model and the Monte Carlo simulation ± 1.96 simulation standard errors (a model-disagreement range, not a frequentist interval).">
                   <TopFive rows={ir.top5} colourKey="team_colour" ci={(d) => [d.range_lo, d.range_hi]} />

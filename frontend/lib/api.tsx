@@ -28,33 +28,50 @@ export async function api<T = any>(path: string, body?: unknown, attempt = 0): P
   return r.json();
 }
 
+// ---- global activity signal: lets the shell show that something is being calculated
+let inFlight = 0;
+const listeners = new Set<(n: number) => void>();
+const bump = (d: number) => { inFlight = Math.max(0, inFlight + d); listeners.forEach((f) => f(inFlight)); };
+export function useActivity(): boolean {
+  const [n, setN] = useState(0);
+  useEffect(() => { listeners.add(setN); setN(inFlight); return () => { listeners.delete(setN); }; }, []);
+  return n > 0;
+}
+
 /** GET with loading/error state. Pass null to skip. Keeps the previous data visible while refetching.
- *  Refreshes are coalesced: if a refresh is asked for while the same request is still running, exactly one
- *  more runs when it finishes — so fast updates (a live race, a rehearsal) never pile up on a slow API. */
+ *  Latest wins: only one request per hook is ever in flight. If the wanted path changes (or a refresh is
+ *  asked for) while one is running, the newest request starts when it finishes and anything in between is
+ *  skipped — so dragging the lap control or a burst of updates never queues work on the API. */
 export function useApi<T = any>(path: string | null, tick: number = 0) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const seq = useRef(0);
-  const flight = useRef<{ path: string | null; dirty: boolean }>({ path: null, dirty: false });
+  const [stale, setStale] = useState(false);          // showing data for a previous request while a new one runs
+  const busy = useRef(false);
+  const want = useRef<string | null>(null);
+  const shown = useRef<string | null>(null);
+  const alive = useRef(true);
   const [n, setN] = useState(0);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => {
-    if (!path) return;
-    if (flight.current.path === path) { flight.current.dirty = true; return; }     // same request in flight: remember, don't stack
-    const id = ++seq.current;
-    flight.current = { path, dirty: false };
-    setLoading(true);
-    api<T>(path).then((d) => { if (id === seq.current) { setData(d); setError(null); } })
-      .catch((e) => { if (id === seq.current) setError(String(e.message || e)); })
-      .finally(() => {
-        if (id !== seq.current) return;
-        const again = flight.current.dirty;
-        flight.current = { path: null, dirty: false };
-        setLoading(false);
-        if (again) setN((x) => x + 1);
-      });
+    want.current = path;
+    if (!path) { setLoading(false); setStale(false); return; }
+    setStale(shown.current !== null && shown.current !== path);
+    if (busy.current) return;                          // the running request will pick the newest path up when it ends
+    const run = (target: string) => {
+      busy.current = true; setLoading(true); bump(1);
+      api<T>(target).then((d) => { if (alive.current && want.current === target) { setData(d); setError(null); shown.current = target; setStale(false); } })
+        .catch((e) => { if (alive.current && want.current === target) setError(String(e.message || e)); })
+        .finally(() => {
+          busy.current = false; bump(-1);
+          if (!alive.current) return;
+          const next = want.current;
+          if (next && next !== target) run(next); else setLoading(false);
+        });
+    };
+    run(path);
   }, [path, tick, n]);
-  return { data, error, loading, reload: useCallback(() => setN((x) => x + 1), []) };
+  return { data, error, loading, stale, reload: useCallback(() => setN((x) => x + 1), []) };
 }
 
 type Race = {
@@ -73,7 +90,9 @@ export function RaceProvider({ children }: { children: React.ReactNode }) {
   const [tick, setTick] = useState(0);
   const [alert, setAlert] = useState<string | null>(null);
   const [wsState, setWs] = useState<"connecting" | "open" | "closed">("connecting");
-  const { data: status } = useApi<any>("/api/status", tick);
+  const [slow, setSlow] = useState(0);
+  useEffect(() => { const t = setInterval(() => setSlow((x) => x + 1), 300000); return () => clearInterval(t); }, []);
+  const { data: status } = useApi<any>("/api/status", slow);
   const { data: sessions } = useApi<any[]>("/api/sessions", 0);
   useEffect(() => { if (status && sessionKey === null) setKey(status.default_session); }, [status, sessionKey]);
   const setSessionKey = useCallback((k: number) => { setKey(k); setLap(null); setDriver(null); }, []);
@@ -106,9 +125,16 @@ export function RaceProvider({ children }: { children: React.ReactNode }) {
       ws.onerror = () => ws?.close();
     };
     open();
-    const poll = setInterval(() => setTick((t) => t + 1), 60000);   // fallback refresh when the socket is unavailable
-    return () => { stop = true; clearTimeout(timer); clearInterval(poll); ws?.close(); };
+    return () => { stop = true; clearTimeout(timer); ws?.close(); };
   }, []);
+  // Fallback refresh: only while a session is actually running (live, delayed or a rehearsal) and the push
+  // socket is not connected. A finished race never changes, so it is never refetched on a timer.
+  const running = ["LIVE", "DELAYED", "REHEARSAL"].includes(cmd?.mode?.mode);
+  useEffect(() => {
+    if (!running || wsState === "open") return;
+    const t = setInterval(() => setTick((x) => x + 1), 20000);
+    return () => clearInterval(t);
+  }, [running, wsState]);
   const value: Race = { sessions: sessions || [], sessionKey, setSessionKey, lap, setLap, driver, setDriver, cmd, cmdError, cmdLoading, status, tick,
     alert, clearAlert: () => setAlert(null), q, wsState };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -76,9 +76,12 @@ export default function CommandCentre() {
         right={<>
           <input type="text" placeholder="Find driver" value={text} onChange={(e) => setText(e.target.value)} className="w-28" aria-label="Filter by driver" />
           <select value={team} onChange={(e) => setTeam(e.target.value)} aria-label="Filter by team"><option value="">All teams</option>{teams.map((t) => <option key={t}>{t}</option>)}</select>
-          <button className={`btn ${cont ? "!border-white/40 !bg-white/[0.14]" : ""}`} aria-pressed={cont} onClick={() => setCont(!cont)}>Title contenders</button>
-          <button className={`btn ${full ? "!border-white/40 !bg-white/[0.14]" : ""}`} aria-pressed={full} onClick={() => setFull(!full)}>{full ? "All columns" : "Essentials"}</button>
-          <button className="btn" onClick={() => exportCsv(c, rows)} title="Download the rows shown as CSV">Export</button>
+          <button className="btn" aria-pressed={cont} onClick={() => setCont(!cont)} title="Show only drivers still able to win the title">Title contenders</button>
+          <div role="group" aria-label="Columns" className="inline-flex rounded-full border border-line bg-white/[0.04] p-0.5">
+            {[["Essentials", false], ["All columns", true]].map(([label, v]) => <button key={String(label)} onClick={() => setFull(v as boolean)} aria-pressed={full === v}
+              className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${full === v ? "bg-white/[0.16] text-ink" : "text-dim hover:text-ink"}`}>{label}</button>)}
+          </div>
+          <button className="btn" onClick={() => exportCsv(c, rows)} title="Download the rows shown as a CSV file">↓ Export CSV</button>
         </>}
         note={<>{c.prediction_note} Gaps are measured at each car's last timing-line crossing. Positions gained are relative to the first position record of the session (grid). Click a row to make that driver the focus for the strategy, weather and recommendation pages. {r.wsState === "open" ? "New laps are pushed live over the WebSocket." : "WebSocket not connected — refreshing every 60 s."}</>}>
         <div className="max-h-[680px] overflow-auto">

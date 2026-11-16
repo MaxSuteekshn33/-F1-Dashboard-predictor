@@ -38,7 +38,7 @@ function Auth() {
           <label className="flex flex-col gap-1.5 text-dim">Email<input type="text" inputMode="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
           <label className="flex flex-col gap-1.5 text-dim">Password{mode === "up" && " (at least 8 characters)"}<input type="password" required minLength={mode === "up" ? 8 : 1} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete={mode === "in" ? "current-password" : "new-password"}
             className="rounded-[10px] border border-line bg-white/[0.06] px-2.5 py-1.5 text-[12.5px] text-ink outline-none focus:border-white/35" /></label>
-          <button className="btn primary w-full" disabled={busy}>{busy ? "Please wait…" : mode === "in" ? "Sign in" : "Create account"}</button>
+          <button className="btn primary w-full" disabled={busy} aria-busy={busy}>{busy ? "Please wait…" : mode === "in" ? "Sign in" : "Create account"}</button>
           {msg && <div role="status" className={`rounded-xl border px-3 py-2 ${msg.ok ? "border-good/40 bg-good/10 text-good" : "border-bad/30 bg-bad/10 text-[#ffb3ae]"}`}>{msg.text}</div>}
         </form>
       </Panel>
@@ -162,7 +162,7 @@ export default function Play() {
                   <select value={form.winner_stops ?? ""} onChange={(e) => setForm({ ...form, winner_stops: e.target.value === "" ? null : Number(e.target.value) })}><option value="">No pick</option>{[0, 1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
               </div>
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                <button className="btn primary" disabled={saving || !form.winner || !form.p2 || !form.p3}>{saving ? "Saving…" : mine[next.id] ? "Update my picks" : "Save my picks"}</button>
+                <button className="btn primary" disabled={saving || !form.winner || !form.p2 || !form.p3} aria-busy={saving}>{saving ? "Saving…" : mine[next.id] ? "Update my picks" : "Save my picks"}</button>
                 <button type="button" className="btn" onClick={useModel} title="Fill the podium with the model's three most likely winners">Use the model&apos;s podium</button>
                 <a className="btn" href="/next">Open the Next Race predictions</a>
               </div>

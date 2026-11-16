@@ -29,12 +29,13 @@ export default function Strategy() {
   const plansPending = !fresh && !pl.error && !s?.note;
   if (!s) return <State loading={ov.loading || pl.loading || (!ov.error && !pl.error)} error={ov.error || pl.error} />;
   const tm = s.tyre_model;
+  const dim = ov.stale || (pl.stale && !plansPending) ? "is-stale" : "";
   const mine = s.stints.filter((x: any) => x.driver_number === s.focus);
   const rec = s.strategies.find((x: any) => x.recommended);
   const degBy: Record<string, any[]> = {};
   for (const p of s.deg_points) (degBy[p.compound] = degBy[p.compound] || []).push(p);
   return (
-    <div className="space-y-5">
+    <div className={`space-y-5 ${dim}`} aria-busy={!!dim}>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
         <Stat label="Focus driver" value={s.focus_code ?? "—"} sub={`lap ${s.lap} of ${s.total_laps}`} />
         <Stat label="Pit loss (green)" value={<>{s.pit_loss.seconds}<span className="text-sm text-faint"> s</span></>} sub={s.pit_loss.source} tag={s.pit_loss.source.startsWith("measured") ? "OBSERVED" : "HISTORICAL"} />

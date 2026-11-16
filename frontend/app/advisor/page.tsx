@@ -40,7 +40,7 @@ export default function Advisor() {
         {busy && any && <span className="inline-flex items-center gap-1.5 text-xs text-faint"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#b79cf0]" />updating</span>}
       </div>
       {note && <State empty={note} />}
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
+      <div className={`grid gap-5 xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)] ${ex.stale || wx.stale || st.stale ? "is-stale" : ""}`} aria-busy={ex.stale || wx.stale || st.stale}>
         <div className="space-y-3">
           {recs.map((x: any, i: number) => (
             <article key={`${x.type}-${i}`} className="glass page-in overflow-hidden rounded-2xl">

@@ -64,7 +64,7 @@ export default function LiveRace() {
             <label className="flex flex-col gap-1.5 text-dim">Speed<select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>{[5, 10, 20, 30].map((x) => <option key={x} value={x}>{x}× (a lap every ~{Math.round(90 / x)} s)</option>)}</select></label>
             <label className="flex flex-col gap-1.5 text-dim">Start at lap<input type="number" className="w-20" min={1} max={70} value={startLap} onChange={(e) => setStartLap(Number(e.target.value) || 1)} /></label>
             {live.rehearsal_needs_code && <label className="flex flex-col gap-1.5 text-dim">Admin code<input type="password" className="w-36 rounded-[10px] border border-line bg-white/[0.06] px-2.5 py-1.5 text-[12.5px] text-ink outline-none" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" /></label>}
-            <button className="btn primary" disabled={busy} onClick={() => call("POST")}>{busy ? "Starting…" : "Start rehearsal"}</button>
+            <button className="btn primary" disabled={busy} aria-busy={busy} onClick={() => call("POST")}>{busy ? "Starting…" : "Start rehearsal"}</button>
           </div>
           {msg && <div role="alert" className="mt-3 rounded-xl border border-bad/30 bg-bad/10 px-4 py-2.5 text-xs text-[#ffb3ae]">{msg}</div>}
         </Panel>
@@ -92,7 +92,7 @@ export default function LiveRace() {
             <div className="text-right"><div className="num text-[34px] font-semibold leading-none">{live.lap ?? "—"}<span className="text-[18px] text-faint"> / {live.total_laps ?? "—"}</span></div><div className="mt-1 text-[11px] text-dim">lap{c?.est_remaining_s ? ` · ~${Math.round(c.est_remaining_s / 60)} min left` : ""}</div></div>
             {rehearsing && <div className="flex flex-col items-end gap-1.5">
               {live.rehearsal_needs_code && <input type="password" placeholder="Admin code" className="w-32 rounded-[10px] border border-line bg-white/[0.06] px-2.5 py-1 text-[12px] text-ink outline-none" value={code} onChange={(e) => setCode(e.target.value)} aria-label="Admin code" />}
-              <button className="btn" disabled={busy} onClick={() => call("DELETE")}>Stop rehearsal</button></div>}
+              <button className="btn" disabled={busy} aria-busy={busy} onClick={() => call("DELETE")}>Stop rehearsal</button></div>}
           </div>
         </div>
         {msg && <div role="alert" className="border-t border-bad/30 bg-bad/10 px-6 py-2 text-xs text-[#ffb3ae]">{msg}</div>}

@@ -111,7 +111,7 @@ export default function NextRace() {
               <div className="text-[11px] text-faint">Unticked: the forecast decides{fsum ? ` (currently ${fsum.maxProb}% max probability)` : ""}.</div>
             </div>
           </div>
-          <div className="mt-4 flex items-center gap-3"><button className="btn primary" onClick={run} disabled={busy || !driver}>{busy ? "Simulating…" : "Compare strategies"}</button>
+          <div className="mt-4 flex items-center gap-3"><button className="btn primary" onClick={run} disabled={busy || !driver} aria-busy={busy}>{busy ? "Simulating…" : "Compare strategies"}</button>
             <span className="text-[11.5px] text-dim">Tests each starting tyre with one and two stops across 1,000 simulated races.</span></div>
           {err && <div className="mt-3"><State error={err} /></div>}
         </Panel>

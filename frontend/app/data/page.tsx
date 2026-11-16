@@ -37,7 +37,7 @@ export default function Data() {
       </div>
       </div>)}
       {tab === "models" && (<div className="page-in space-y-5">
-      <Panel title="Model performance — walk-forward backtests" tags={["MODEL"]} right={<><button className="btn" onClick={retrain} disabled={busy}>{busy ? "Refreshing data & retraining… (several minutes)" : "Refresh data & retrain if new races"}</button></>} note={<>{mod.data?.validation} {mod.data?.retraining}</>}>
+      <Panel title="Model performance — walk-forward backtests" tags={["MODEL"]} right={<><button className="btn" onClick={retrain} disabled={busy} aria-busy={busy}>{busy ? "Refreshing data & retraining… (several minutes)" : "Refresh data & retrain if new races"}</button></>} note={<>{mod.data?.validation} {mod.data?.retraining}</>}>
         {msg && <div className="mb-3 rounded-xl border border-line bg-panel2 px-3 py-2 text-xs text-dim">{msg.map((m, i) => <div key={i}>• {m}</div>)}</div>}
         <State loading={mod.loading} error={mod.error} empty={mod.data && !active.length ? "No trained models registered yet. Run `python -m app.prerace train` and `python -m app.inrace train`." : null}>
           <div className="space-y-5">{active.map((m: any) => <Model key={m.name} m={m} />)}</div>

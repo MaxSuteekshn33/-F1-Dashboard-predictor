@@ -79,7 +79,7 @@ export default function Lab() {
           ))}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button className="btn primary" onClick={run} disabled={busy || !r.sessionKey}>{busy ? "Simulating…" : `Run ${scns.length} scenario${scns.length > 1 ? "s" : ""}`}</button>
+          <button className="btn primary" onClick={run} disabled={busy || !r.sessionKey} aria-busy={busy}>{busy ? "Simulating…" : `Run ${scns.length} scenario${scns.length > 1 ? "s" : ""}`}</button>
           <button className="btn" disabled={scns.length >= 4} onClick={() => setScns([...scns, blank(`Scenario ${scns.length + 1}`)])}>+ Add scenario</button>
           <label className="flex items-center gap-1.5 text-xs text-faint">Simulations each<select value={nSims} onChange={(e) => setNSims(Number(e.target.value))}>{[500, 1000, 2000, 5000].map((n) => <option key={n}>{n}</option>)}</select></label>
         </div>

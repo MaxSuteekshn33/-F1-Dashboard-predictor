@@ -23,6 +23,35 @@ def clean(o):
     return o
 
 
+# ---------------------------------------------------------------- result cache keyed by race state
+_state_cache: dict = {}
+
+
+def state_cached(name: str, ttl: float = 600.0):
+    """Cache a heavy result per (race, lap as-of time, extra arguments). The as-of time is part of the key, so a
+    live race or a rehearsal moves to a new entry by itself while a stored race is computed once and reused."""
+    def deco(fn):
+        def wrap(session_key, lap=None, *a, **k):
+            st = rs.state(session_key, lap)
+            key = (name, session_key, st["lap"], round(st["T"] or 0, 1), st["mode"]["mode"], json.dumps([a, k], sort_keys=True, default=str))
+            hit = _state_cache.get(key)
+            if hit and hit[0] > time.time():
+                return hit[1]
+            out = fn(session_key, lap, *a, **k)
+            if len(_state_cache) > 160:
+                now = time.time()
+                for kk in [kk for kk, v in _state_cache.items() if v[0] < now]:
+                    _state_cache.pop(kk, None)
+                if len(_state_cache) > 160:
+                    _state_cache.clear()
+            _state_cache[key] = (time.time() + ttl, out)
+            return out
+        wrap.__name__ = fn.__name__
+        wrap.uncached = fn
+        return wrap
+    return deco
+
+
 # ---------------------------------------------------------------- reference data
 @cached(ttl=1800)
 def colours() -> dict:
@@ -189,6 +218,7 @@ def prerace_prediction(race_id: int | None = None) -> dict:
             "tags": {"p_win": "MODEL", "grid": "OBSERVED" if variant == "pre_race" else "UNAVAILABLE", "points_before": "OBSERVED (F1DB)"}}
 
 
+@state_cached("inrace_prediction")
 def inrace_prediction(session_key: int, lap: int | None = None) -> dict:
     ctx = sim.context(session_key, lap)
     st = ctx["st"]
@@ -467,6 +497,7 @@ def lab(session_key: int, body: dict) -> dict:
 
 
 # ---------------------------------------------------------------- 4. telemetry
+@state_cached("lap_table")
 def lap_table(session_key: int, lap: int | None = None) -> dict:
     """Lap times, sectors, stint/compound per lap and the position trace — all up to the as-of lap."""
     d = rs.load(session_key)
@@ -614,6 +645,7 @@ def track_map(session_key: int, lap: int | None = None) -> dict:
             "limitations": ["Positions are provider x/y coordinates, so a geographic base map (MapLibre) cannot be aligned without a calibrated transform — the circuit is drawn from the cars' own trace instead."]}
 
 
+@state_cached("pace_comparison")
 def pace_comparison(session_key: int, lap: int | None = None) -> dict:
     """Race pace by compound/stint for every driver + qualifying-vs-race pace when the qualifying session is stored."""
     st = rs.state(session_key, lap)
@@ -772,6 +804,7 @@ def race_profiles() -> pd.DataFrame:
     return f
 
 
+@state_cached("similar")
 def similar(session_key: int, lap: int | None = None, k: int = 6) -> dict:
     """Stored races most similar to the current conditions (weather so far + circuit). Similarity is not prophecy."""
     f = race_profiles()
@@ -874,6 +907,7 @@ def analytics(year: int | None = None) -> dict:
 
 
 # ---------------------------------------------------------------- 11. advisor
+@state_cached("advisor")
 def advisor(session_key: int, lap: int | None, driver: int | None, parts: str = "weather,strategy,explain") -> dict:
     """Plain-English recommendations assembled only from computed module outputs — nothing is invented."""
     ctx = sim.context(session_key, lap)

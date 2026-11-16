@@ -154,9 +154,14 @@ def strategy(session_key: int | None = None, lap: int | None = None, driver: int
     return guard(sv.strategy_view, session_key or default_key(), lap, driver, parts)
 
 
+@sv.state_cached("weather", ttl=300)
+def _weather_cached(session_key, lap=None, driver=None):
+    return weather.intelligence(session_key, lap, driver)
+
+
 @app.get("/api/weather")
 def weather_get(session_key: int | None = None, lap: int | None = None, driver: int | None = None):
-    return guard(weather.intelligence, session_key or default_key(), lap, driver)
+    return guard(_weather_cached, session_key or default_key(), lap, driver)
 
 
 @app.post("/api/weather/scenario")

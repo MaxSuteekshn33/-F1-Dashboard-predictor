@@ -38,13 +38,34 @@ select, input[type=number], input[type=text] { background: rgba(255,255,255,.06)
 select:hover, input[type=number]:hover, input[type=text]:hover { background: rgba(255,255,255,.09); }
 select:focus, input:focus { border-color: rgba(255,255,255,.35); }
 select option { background: #14161b; color: #f2f3f5; }
-.btn { display: inline-block; text-decoration: none; cursor: pointer; background: rgba(255,255,255,.06); border: 1px solid var(--hair); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; color: #f2f3f5;
-  transition: background .15s, border-color .15s, transform .08s; }
-.btn:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.22); }
-.btn:active { transform: scale(.98); }
-.btn.primary { background: linear-gradient(180deg, #ff2a1f, #d10500); border-color: rgba(255,255,255,.18); font-weight: 600; box-shadow: 0 8px 22px -10px rgba(225,6,0,.8); }
-.btn.primary:hover { background: linear-gradient(180deg, #ff4136, #e10600); }
-.btn:disabled { opacity: .45; cursor: default; }
+/* Buttons — one system for every call to action.
+   .btn            secondary action        .btn.primary   the single main action of a panel
+   .btn.quiet      low-emphasis action     [aria-pressed] toggles show their on-state
+   States follow the UI UX Pro Max rules: pointer + visible hover, pressed feedback, dimmed not-allowed when disabled,
+   busy buttons are disabled with a spinner, 32px minimum height, labels never wrap. */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; white-space: nowrap; text-decoration: none; cursor: pointer;
+  background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.16); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 500; line-height: 1.2; color: #f2f3f5;
+  transition: background .15s, border-color .15s, transform .08s, box-shadow .15s; }
+.btn:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.3); }
+.btn:active { transform: scale(.97); background: rgba(255,255,255,.2); }
+.btn.primary { background: linear-gradient(180deg, #ff2a1f, #d10500); border-color: rgba(255,255,255,.22); font-weight: 600; padding: 7px 18px; min-height: 36px; font-size: 13px;
+  box-shadow: 0 8px 22px -10px rgba(225,6,0,.85), inset 0 1px 0 rgba(255,255,255,.22); }
+.btn.primary:hover { background: linear-gradient(180deg, #ff463b, #e10600); box-shadow: 0 10px 26px -10px rgba(225,6,0,1), inset 0 1px 0 rgba(255,255,255,.28); }
+.btn.quiet { background: transparent; border-color: transparent; color: rgba(255,255,255,.7); }
+.btn.quiet:hover { background: rgba(255,255,255,.08); color: #f2f3f5; }
+.btn[aria-pressed="true"] { background: rgba(255,255,255,.2); border-color: rgba(255,255,255,.45); }
+.btn[aria-pressed="true"]::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: #2fbf71; box-shadow: 0 0 8px #2fbf71; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .42; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn:disabled:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.16); }
+.btn.primary:disabled:hover { background: linear-gradient(180deg, #ff2a1f, #d10500); }
+.btn[aria-busy="true"]::before { content: ""; width: 12px; height: 12px; border-radius: 999px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+select { cursor: pointer; min-height: 32px; }
+input[type=checkbox] { cursor: pointer; accent-color: #e10600; width: 15px; height: 15px; }
+label:has(> input[type=checkbox]) { cursor: pointer; }
+table.grid-t tbody tr[style*="cursor: pointer"]:hover td { background: rgba(255,255,255,.07); }
+.skip-link { position: fixed; left: 12px; top: -60px; z-index: 60; transition: top .15s; }
+.skip-link:focus { top: 12px; }
 
 details.more > summary { cursor: pointer; list-style: none; user-select: none; color: rgba(255,255,255,.6); font-size: 11px; display: inline-flex; align-items: center; gap: 6px; }
 details.more > summary::-webkit-details-marker { display: none; }
@@ -66,3 +87,10 @@ details.more > summary:hover { color: rgba(255,255,255,.8); }
 :focus-visible { outline: 2px solid #7fb6f5; outline-offset: 2px; border-radius: 8px; }
 .btn:focus-visible, [role=tab]:focus-visible { border-radius: 999px; }
 .num { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+/* activity bar: a thin sweep at the very top while any calculation is running */
+@keyframes sweep { 0% { transform: translateX(-120%); } 100% { transform: translateX(420%); } }
+.activity-bar { animation: sweep 1.15s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .btn[aria-busy="true"]::before { animation: none; } .activity-bar { animation: none; width: 100%; opacity: .6; } }
+/* content from a previous lap/driver while the new one is being calculated */
+.is-stale { opacity: .55; transition: opacity .2s; }
