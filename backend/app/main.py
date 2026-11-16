@@ -191,6 +191,18 @@ def predict_inrace(session_key: int | None = None, lap: int | None = None):
     return guard(sv.inrace_prediction, session_key or default_key(), lap, persist="inrace")
 
 
+# Deferred answers hold inputs only (no simulation), so they are quick to build, skip the heavy-request queue
+# and are kept per race state for repeat visits.
+@sv.state_cached("strategy_deferred", ttl=600)
+def _strategy_deferred(session_key, lap=None, driver=None, parts="plans"):
+    return sv.strategy_view(session_key, lap, driver, parts, defer=True)
+
+
+@sv.state_cached("safetycar_deferred", ttl=600)
+def _safetycar_deferred(session_key, lap=None, driver=None, body=None):
+    return sv.safety_car(session_key, lap, driver, body, defer=True)
+
+
 def _stored(persist: str, *a):
     """A finished result from the durable store, looked up exactly as `guard` would."""
     return store.get(store.state_key(persist, a[0], a[1], a[2:], {}))
@@ -204,7 +216,7 @@ def strategy(session_key: int | None = None, lap: int | None = None, driver: int
     key = session_key or default_key()
     if defer and "plans" in parts:
         hit = _stored("strategy", key, lap, driver, parts)
-        return hit if hit is not None else guard(sv.strategy_view, key, lap, driver, parts, defer=True)
+        return hit if hit is not None else guard(_strategy_deferred, key, lap, driver, parts, light=True)
     return guard(sv.strategy_view, key, lap, driver, parts, persist="strategy")
 
 
@@ -251,7 +263,7 @@ def safetycar(body: dict = Body(...)):
     body = {k: v for k, v in body.items() if k != "defer"}
     if defer:       # see /api/strategy: a stored answer whole, otherwise packages for the browser to run
         hit = _stored("safetycar", key, body.get("lap"), body.get("driver"), body)
-        return hit if hit is not None else guard(sv.safety_car, key, body.get("lap"), body.get("driver"), body, defer=True)
+        return hit if hit is not None else guard(_safetycar_deferred, key, body.get("lap"), body.get("driver"), body, light=True)
     return guard(_safetycar_cached, key, body.get("lap"), body.get("driver"), body, persist="safetycar")
 
 

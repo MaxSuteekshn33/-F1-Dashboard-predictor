@@ -27,6 +27,7 @@ MAX_BYTES = 600_000            # larger responses are not worth a network round 
 MAX_ROWS = 6000
 _lock = threading.Lock()
 _salt = {"v": ""}
+_absent: dict = {}
 _version: dict = {}
 stats = {"local_hits": 0, "remote_hits": 0, "misses": 0, "writes": 0, "remote_errors": 0, "remote_paused_until": 0.0}
 
@@ -89,12 +90,15 @@ def get(key: str | None, remote: bool = True):
             return json.loads(zlib.decompress(row[0]))
     except Exception:
         pass
-    if remote:
+    if remote and _absent.get(key, 0) < time.time():
         val = _remote_get(key)
         if val is not None:
             stats["remote_hits"] += 1
             _local_put(key, "", val)
             return val
+        if len(_absent) > 5000:
+            _absent.clear()
+        _absent[key] = time.time() + 900      # a miss is remembered, so the same question does not ask the network again
     stats["misses"] += 1
     return None
 
@@ -102,6 +106,7 @@ def get(key: str | None, remote: bool = True):
 def put(key: str | None, name: str, value, remote: bool = True) -> None:
     if not key or value is None:
         return
+    _absent.pop(key, None)
     blob = _local_put(key, name, value)
     if blob is not None and remote and _remote_on() and len(blob) < MAX_BYTES:
         threading.Thread(target=_remote_put, args=(key, name, value), daemon=True).start()

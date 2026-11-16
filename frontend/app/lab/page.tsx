@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api, useRace } from "@/lib/api";
-import { inWorker, resolveDeferred } from "@/lib/browserSim";
+import { resolveDeferred, runLabInBrowser } from "@/lib/browserSim";
 import { Driver, Notes, Panel, State, Tag, Tyre, num, pct, signed, fmtDur } from "@/components/ui";
 import { OptionTable, PositionDist } from "@/components/Options";
 
@@ -44,7 +44,7 @@ export default function Lab() {
     const b = body();
     try {
       let out: any;
-      try { const prep = await api<any>("/api/sim/prepare", b); out = await inWorker({ jobs: prep.jobs, note: prep.note }); }
+      try { const prep = await api<any>("/api/sim/prepare", b); out = await runLabInBrowser(prep.jobs, prep.note); }
       catch { out = { ...(await api<any>("/api/sim/run", b)), engine: "server" }; }
       setRes(out);
     } catch (e: any) { setErr(String(e?.message ?? e)); } finally { setBusy(false); }

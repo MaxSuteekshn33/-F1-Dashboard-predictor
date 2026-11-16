@@ -255,8 +255,9 @@ export function labFinish(results: any[], note: string): { results: any[]; note:
   return { results, note, engine: "browser" };
 }
 
-export function runLab(jobs: Job[], note: string) {
-  return labFinish(jobs.map((j) => (j.error || !j.package ? { name: j.name, error: j.error || "simulation failed" } : labResult(j, runPackage(j.package)))), note);
+/** `results[i]` may hold job i's finished simulation (run elsewhere, e.g. in parallel workers); missing ones are run here. */
+export function runLab(jobs: Job[], note: string, results?: (SimResult | undefined)[]) {
+  return labFinish(jobs.map((j, i) => (j.error || !j.package ? { name: j.name, error: j.error || "simulation failed" } : labResult(j, results?.[i] ?? runPackage(j.package)))), note);
 }
 
 // ---------------------------------------------------------------- deferred comparisons (strategy, Safety Car, next race)
@@ -265,8 +266,8 @@ export function runLab(jobs: Job[], note: string) {
 // service.safety_car_finish and nextrace.next_finish.
 type CmpJob = { label: string; plan: { lap: number; compound: string }[]; package: Package };
 
-export function compareTable(jobs: CmpJob[], keepField = false): any[] {
-  const runs = jobs.map((j) => ({ j, r: runPackage(j.package) })).filter((x) => x.r.focus);
+export function compareTable(jobs: CmpJob[], keepField = false, results?: SimResult[]): any[] {
+  const runs = jobs.map((j, i) => ({ j, r: results?.[i] ?? runPackage(j.package) })).filter((x) => x.r.focus);
   const out: any[] = runs.map(({ j, r }) => {
     const f = r.focus!;
     return { label: j.label, plan: j.plan, exp_pos: round(f.exp_pos, 2), p_win: round(f.p_win, 4), p_podium: round(f.p_podium, 4), p_win_se: round(f.p_win_se, 4),
@@ -301,12 +302,12 @@ export function compareTable(jobs: CmpJob[], keepField = false): any[] {
 const byFinishThenTime = (a: any, b: any, timeKey: string) => round(a.exp_pos, 1) - round(b.exp_pos, 1) || (a[timeKey] || 0) - (b[timeKey] || 0);
 
 /** Complete a response that came back with `deferred` packages. Returns the same shape the server would have sent. */
-export function finishDeferred(data: any): any {
+export function finishDeferred(data: any, results?: SimResult[]): any {
   const d = data.deferred;
   const out = { ...data, engine: "browser" };
   delete out.deferred;
   if (d.kind === "strategy") {
-    const table = compareTable(d.jobs);
+    const table = compareTable(d.jobs, false, results);
     const tm: Record<string, any> = Object.fromEntries(table.map((t) => [t.label, t]));
     out.strategies = d.opts.map((o: any) => {
       const t = tm[o.label] || {};
@@ -323,7 +324,7 @@ export function finishDeferred(data: any): any {
     }
     out.n_sims = table.length ? table[0].n_sims : null;
   } else if (d.kind === "safetycar") {
-    const table = compareTable(d.jobs);
+    const table = compareTable(d.jobs, false, results);
     out.options = table;
     out.verdicts = {};
     if (table.length === 6) for (const [k, i] of [["sc", 0], ["vsc", 2], ["green", 4]] as [string, number][]) {
@@ -331,7 +332,7 @@ export function finishDeferred(data: any): any {
       out.verdicts[k] = { pit_minus_stay_positions: round(a.exp_pos - b.exp_pos, 2), better: a.exp_pos < b.exp_pos ? "PIT" : "STAY OUT", pit: a.label, stay: b.label };
     }
   } else if (d.kind === "next") {
-    const table = compareTable(d.jobs, true);
+    const table = compareTable(d.jobs, true, results);
     const bestModel = Math.min(...d.options.map((o: any) => o.model_time));
     const by: Record<string, any> = Object.fromEntries(d.options.map((o: any) => [o.label, o]));
     for (const t of table) { const o = by[t.label]; t.start = o.start; t.stops = o.stops; t.model_delta = round(o.model_time - bestModel, 2); }

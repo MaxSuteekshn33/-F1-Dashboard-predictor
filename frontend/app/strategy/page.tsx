@@ -21,14 +21,14 @@ function Stints({ stints, total, lap, plan }: { stints: any[]; total: number; la
 export default function Strategy() {
   const r = useRace();
   const [tab, setTab] = useState("plan");
-  // Two requests: a quick overview (tyres, pit loss, stints, rivals) and the simulated plans, which take longer.
+  // One request. A stored answer comes back whole. Otherwise the server sends the tyre model, stints and rivals
+  // (shown at once) plus the inputs for the plan simulations, which this browser then runs.
   const base = r.sessionKey && r.driver ? `/api/strategy?${r.q}&driver=${r.driver}` : null;
-  const ov = useApi<any>(base && `${base}&parts=overview`, r.tick);
-  // `defer=1`: a stored answer comes back whole; otherwise the server sends the inputs and this browser runs the simulations.
-  const plRaw = useApi<any>(base && `${base}&parts=plans&defer=1`, r.tick);
-  const done = useResolved<any>(plRaw.data, () => api(`${base}&parts=plans`));
-  const pl = { ...plRaw, data: done.data, error: plRaw.error || done.error };
-  const fresh = pl.data && (!ov.data || (pl.data.lap === ov.data.lap && pl.data.focus === ov.data.focus));
+  const raw = useApi<any>(base && `${base}&parts=plans&defer=1`, r.tick);
+  const done = useResolved<any>(raw.data, () => api(`${base}&parts=plans`));
+  const ov = { data: raw.data, error: raw.error, loading: raw.loading, stale: raw.stale };
+  const pl = { data: done.data, error: raw.error || done.error, loading: raw.loading || done.simulating, stale: raw.stale };
+  const fresh = !!pl.data;
   const s = fresh ? pl.data : ov.data;
   const plansPending = !fresh && !pl.error && !s?.note;
   if (!s) return <State loading={ov.loading || pl.loading || (!ov.error && !pl.error)} error={ov.error || pl.error} />;
