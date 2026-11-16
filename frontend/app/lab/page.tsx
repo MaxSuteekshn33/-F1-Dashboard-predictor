@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api, useRace } from "@/lib/api";
+import { inWorker, resolveDeferred } from "@/lib/browserSim";
 import { Driver, Notes, Panel, State, Tag, Tyre, num, pct, signed, fmtDur } from "@/components/ui";
 import { OptionTable, PositionDist } from "@/components/Options";
 
@@ -38,19 +39,12 @@ export default function Lab() {
     rival: s.rival && s.rival_mode !== "none" ? (s.rival_mode === "stay" ? { driver: s.rival, stay_out: true } : { driver: s.rival, pit_laps: [{ lap: s.rival_lap ?? lap + 1, compound: s.rival_compound }] }) : undefined })) });
   // The server prepares the inputs (quick); the simulations run in this browser, off the main thread — same
   // engine and run count as the server's. If that is not possible the server runs them instead.
-  const inBrowser = (prep: any) => new Promise<any>((resolve, reject) => {
-    const w = new Worker(new URL("../../lib/sim.worker.ts", import.meta.url));
-    const stop = setTimeout(() => { w.terminate(); reject(new Error("timed out")); }, 60000);
-    w.onmessage = (e) => { clearTimeout(stop); w.terminate(); e.data.ok ? resolve(e.data.res) : reject(new Error(e.data.error)); };
-    w.onerror = (e) => { clearTimeout(stop); w.terminate(); reject(new Error(e.message || "worker failed")); };
-    w.postMessage({ jobs: prep.jobs, note: prep.note });
-  });
   const run = async () => {
     setBusy(true); setErr(null);
     const b = body();
     try {
       let out: any;
-      try { out = await inBrowser(await api("/api/sim/prepare", b)); }
+      try { const prep = await api<any>("/api/sim/prepare", b); out = await inWorker({ jobs: prep.jobs, note: prep.note }); }
       catch { out = { ...(await api<any>("/api/sim/run", b)), engine: "server" }; }
       setRes(out);
     } catch (e: any) { setErr(String(e?.message ?? e)); } finally { setBusy(false); }
@@ -155,7 +149,8 @@ function SafetyCar() {
   useEffect(() => {
     if (!r.sessionKey || !r.driver) return;
     let live = true; setBusy(true); setErr(null);
-    api("/api/safetycar", { session_key: r.sessionKey, lap: r.lap, driver: r.driver, duration: dur, pit_closed: closed })
+    const q = { session_key: r.sessionKey, lap: r.lap, driver: r.driver, duration: dur, pit_closed: closed };
+    api<any>("/api/safetycar", { ...q, defer: true }).then((x) => resolveDeferred<any>(x, () => api("/api/safetycar", q)))
       .then((x) => live && setD(x)).catch((e) => live && setErr(String(e.message))).finally(() => live && setBusy(false));
     return () => { live = false; };
   }, [r.sessionKey, r.lap, r.driver, dur, closed, r.tick]);

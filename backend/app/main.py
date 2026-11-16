@@ -191,9 +191,21 @@ def predict_inrace(session_key: int | None = None, lap: int | None = None):
     return guard(sv.inrace_prediction, session_key or default_key(), lap, persist="inrace")
 
 
+def _stored(persist: str, *a):
+    """A finished result from the durable store, looked up exactly as `guard` would."""
+    return store.get(store.state_key(persist, a[0], a[1], a[2:], {}))
+
+
 @app.get("/api/strategy")
-def strategy(session_key: int | None = None, lap: int | None = None, driver: int | None = None, parts: str = "overview,plans"):
-    return guard(sv.strategy_view, session_key or default_key(), lap, driver, parts, persist="strategy")
+def strategy(session_key: int | None = None, lap: int | None = None, driver: int | None = None, parts: str = "overview,plans", defer: int = 0):
+    """`defer=1`: if the simulated plans are not already stored, return everything except the simulations, with
+    ready-to-run packages under "deferred" — the page runs them in the visitor's browser (same engine, same
+    run count). A stored answer is always returned whole."""
+    key = session_key or default_key()
+    if defer and "plans" in parts:
+        hit = _stored("strategy", key, lap, driver, parts)
+        return hit if hit is not None else guard(sv.strategy_view, key, lap, driver, parts, defer=True)
+    return guard(sv.strategy_view, key, lap, driver, parts, persist="strategy")
 
 
 @sv.state_cached("weather", ttl=300)
@@ -234,7 +246,13 @@ def _lab_cached(session_key, lap=None, body=None):
 
 @app.post("/api/safetycar")
 def safetycar(body: dict = Body(...)):
-    return guard(_safetycar_cached, body.get("session_key") or default_key(), body.get("lap"), body.get("driver"), body, persist="safetycar")
+    key = body.get("session_key") or default_key()
+    defer = bool(body.get("defer"))
+    body = {k: v for k, v in body.items() if k != "defer"}
+    if defer:       # see /api/strategy: a stored answer whole, otherwise packages for the browser to run
+        hit = _stored("safetycar", key, body.get("lap"), body.get("driver"), body)
+        return hit if hit is not None else guard(sv.safety_car, key, body.get("lap"), body.get("driver"), body, defer=True)
+    return guard(_safetycar_cached, key, body.get("lap"), body.get("driver"), body, persist="safetycar")
 
 
 @app.post("/api/sim/run")

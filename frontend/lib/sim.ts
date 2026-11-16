@@ -258,3 +258,89 @@ export function labFinish(results: any[], note: string): { results: any[]; note:
 export function runLab(jobs: Job[], note: string) {
   return labFinish(jobs.map((j) => (j.error || !j.package ? { name: j.name, error: j.error || "simulation failed" } : labResult(j, runPackage(j.package)))), note);
 }
+
+// ---------------------------------------------------------------- deferred comparisons (strategy, Safety Car, next race)
+// The server answers these pages with everything except the simulations, plus one package per option under
+// `deferred`. The functions below are ports of weather.compare_finish, service.strategy_finish,
+// service.safety_car_finish and nextrace.next_finish.
+type CmpJob = { label: string; plan: { lap: number; compound: string }[]; package: Package };
+
+export function compareTable(jobs: CmpJob[], keepField = false): any[] {
+  const runs = jobs.map((j) => ({ j, r: runPackage(j.package) })).filter((x) => x.r.focus);
+  const out: any[] = runs.map(({ j, r }) => {
+    const f = r.focus!;
+    return { label: j.label, plan: j.plan, exp_pos: round(f.exp_pos, 2), p_win: round(f.p_win, 4), p_podium: round(f.p_podium, 4), p_win_se: round(f.p_win_se, 4),
+      risk_pos_sd: round(f.risk, 2), pos_p10: f.pos_p10, pos_p90: f.pos_p90, blocked_laps: round(f.blocked_laps, 1), pos_hist: f.pos_hist.map((x) => round(x, 4)),
+      exp_time: f.exp_time, _t: f.sims_time, _a: f.sims_alive, n_sims: r.n_sims, wetness_path: r.wetness_path, inputs: r.inputs, _field: r.drivers };
+  });
+  if (out.length) {
+    const n = out[0]._t.length;
+    // compare only the simulated races in which the car finished under every option
+    const ok = new Uint8Array(n).fill(1);
+    for (const o of out) for (let i = 0; i < n; i++) if (!o._a[i]) ok[i] = 0;
+    let cnt = 0; for (let i = 0; i < n; i++) cnt += ok[i];
+    const means: (number | null)[] = out.map((o) => { if (!cnt) return null; let s = 0; for (let i = 0; i < n; i++) if (ok[i]) s += o._t[i]; return s / cnt; });
+    const real = means.filter((x): x is number => x !== null);
+    const best = real.length ? Math.min(...real) : null, ref = means[0];
+    out.forEach((o, k) => {
+      const mu = means[k];
+      o.time_vs_best = mu !== null && best !== null ? round(mu - best, 2) : null;
+      o.time_vs_first = mu !== null && ref !== null ? round(mu - ref, 2) : null;
+      if (cnt) {
+        let s = 0, s2 = 0;
+        for (let i = 0; i < n; i++) if (ok[i]) { const d = o._t[i] - out[0]._t[i]; s += d; s2 += d * d; }
+        o.paired_se = round(Math.sqrt(Math.max(0, s2 / cnt - (s / cnt) * (s / cnt))) / Math.sqrt(Math.max(1, cnt)), 2);
+      } else o.paired_se = null;
+    });
+    for (const o of out) { delete o._t; delete o._a; }
+  }
+  if (!keepField) for (const o of out) delete o._field;
+  return out;
+}
+
+const byFinishThenTime = (a: any, b: any, timeKey: string) => round(a.exp_pos, 1) - round(b.exp_pos, 1) || (a[timeKey] || 0) - (b[timeKey] || 0);
+
+/** Complete a response that came back with `deferred` packages. Returns the same shape the server would have sent. */
+export function finishDeferred(data: any): any {
+  const d = data.deferred;
+  const out = { ...data, engine: "browser" };
+  delete out.deferred;
+  if (d.kind === "strategy") {
+    const table = compareTable(d.jobs);
+    const tm: Record<string, any> = Object.fromEntries(table.map((t) => [t.label, t]));
+    out.strategies = d.opts.map((o: any) => {
+      const t = tm[o.label] || {};
+      return { label: o.label, name: o.name, plan: o.plan, stints: o.stints, rule_ok: o.rule_ok, recommended_pit_lap: o.plan.length ? o.plan[0].lap : null,
+        pit_time_lost: round(o.pit_time_lost, 1), deg_time: round(o.deg_time, 1), deterministic_delta: o.delta_vs_best ?? null, optimal_deterministic: o.optimal ?? false,
+        exp_time_delta: t.time_vs_best ?? null, exp_pos: t.exp_pos ?? null, p_win: t.p_win ?? null, p_podium: t.p_podium ?? null, traffic_laps: t.blocked_laps ?? null,
+        pos_p10: t.pos_p10 ?? null, pos_p90: t.pos_p90 ?? null, pos_hist: t.pos_hist ?? null };
+    });
+    const legal = out.strategies.filter((s: any) => s.rule_ok && s.exp_pos !== null);
+    if (legal.length) {
+      const best = legal.reduce((a: any, b: any) => (byFinishThenTime(b, a, "exp_time_delta") < 0 ? b : a));
+      best.recommended = true;
+      if (d.windows && best.label in d.windows) out.window = d.windows[best.label];
+    }
+    out.n_sims = table.length ? table[0].n_sims : null;
+  } else if (d.kind === "safetycar") {
+    const table = compareTable(d.jobs);
+    out.options = table;
+    out.verdicts = {};
+    if (table.length === 6) for (const [k, i] of [["sc", 0], ["vsc", 2], ["green", 4]] as [string, number][]) {
+      const a = table[i], b = table[i + 1];
+      out.verdicts[k] = { pit_minus_stay_positions: round(a.exp_pos - b.exp_pos, 2), better: a.exp_pos < b.exp_pos ? "PIT" : "STAY OUT", pit: a.label, stay: b.label };
+    }
+  } else if (d.kind === "next") {
+    const table = compareTable(d.jobs, true);
+    const bestModel = Math.min(...d.options.map((o: any) => o.model_time));
+    const by: Record<string, any> = Object.fromEntries(d.options.map((o: any) => [o.label, o]));
+    for (const t of table) { const o = by[t.label]; t.start = o.start; t.stops = o.stops; t.model_delta = round(o.model_time - bestModel, 2); }
+    const best = table.length ? table.reduce((a, b) => (byFinishThenTime(b, a, "time_vs_best") < 0 ? b : a)) : null;
+    out.field = (best?._field || []).map((x: DriverResult) => ({ code: x.code, team_colour: x.team_colour, p_win: round(x.p_win, 4), p_podium: round(x.p_podium, 4),
+      exp_pos: round(x.exp_pos, 2), grid: d.grid_of[String(x.driver_number)] ?? null })).sort((a: any, b: any) => a.exp_pos - b.exp_pos);
+    for (const t of table) delete t._field;
+    out.options = table; out.best = best ? best.label : null;
+    out.wetness_path = best ? best.wetness_path : null; out.n_sims = best ? best.n_sims : d.n_sims;
+  } else throw new Error(`unknown deferred kind ${d.kind}`);
+  return out;
+}

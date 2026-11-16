@@ -81,10 +81,11 @@ def rain_timeline(fc: dict, T: float, R: int, lap_s: float) -> tuple[list[float]
                  "first_rain_min": round((first - T) / 60, 0) if first else None}
 
 
-def compare(ctx: dict, focus: int, options: list[dict], scenario: dict, n: int | None = None, keep_field: bool = False) -> list[dict]:
-    """Run the same simulated futures (common random numbers) for each candidate decision of `focus`."""
+def compare_jobs(ctx: dict, focus: int, options: list[dict], scenario: dict, n: int | None = None) -> list[dict]:
+    """One ready-to-run simulation package per candidate decision of `focus` (no simulation happens here). Every
+    package carries the same seed, so the options are compared over the same simulated futures."""
     base_plans = sim.default_plans(ctx)
-    out = []
+    jobs = []
     for o in options:
         plans = dict(base_plans)
         sc = dict(scenario)
@@ -93,11 +94,19 @@ def compare(ctx: dict, focus: int, options: list[dict], scenario: dict, n: int |
             sc["manual"] = list(set(sc.get("manual", [])) | {focus})
         sc.update(o.get("scenario", {}))
         kw = {"n": n} if n else {}
-        r = sim.run(ctx, plans, sc, seed=7, focus=focus, **kw)
-        if "focus" not in r:
+        pk = sim.package(ctx, plans, sc, seed=7, focus=focus, **kw)
+        if pk.get("error") or pk.get("focus") is None:
             continue
+        jobs.append({"label": o["label"], "plan": [{"lap": a, "compound": b} for a, b in plans.get(focus, [])], "package": pk})
+    return jobs
+
+
+def compare_finish(jobs: list[dict], results: list[dict], keep_field: bool = False) -> list[dict]:
+    """The comparison table from finished simulations (ported to the browser as `compareTable` in lib/sim.ts)."""
+    out = []
+    for j, r in zip(jobs, results):
         f = r["focus"]
-        out.append({"label": o["label"], "plan": [{"lap": a, "compound": b} for a, b in plans.get(focus, [])], "exp_pos": round(f["exp_pos"], 2),
+        out.append({"label": j["label"], "plan": j["plan"], "exp_pos": round(f["exp_pos"], 2),
                     "p_win": round(f["p_win"], 4), "p_podium": round(f["p_podium"], 4), "p_win_se": round(f["p_win_se"], 4),
                     "risk_pos_sd": round(f["risk"], 2), "pos_p10": f["pos_p10"], "pos_p90": f["pos_p90"],
                     "blocked_laps": round(f["blocked_laps"], 1), "pos_hist": [round(x, 4) for x in f["pos_hist"]],
@@ -118,6 +127,12 @@ def compare(ctx: dict, focus: int, options: list[dict], scenario: dict, n: int |
         for o in out:
             o.pop("_field", None)
     return out
+
+
+def compare(ctx: dict, focus: int, options: list[dict], scenario: dict, n: int | None = None, keep_field: bool = False) -> list[dict]:
+    """Run the same simulated futures (common random numbers) for each candidate decision of `focus`."""
+    jobs = compare_jobs(ctx, focus, options, scenario, n)
+    return compare_finish(jobs, [sim.run_package(j["package"]) for j in jobs], keep_field)
 
 
 def _confidence(opts: list[dict], best: dict, forecast_conf: float) -> dict:

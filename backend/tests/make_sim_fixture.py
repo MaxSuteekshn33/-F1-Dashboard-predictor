@@ -38,9 +38,37 @@ def main() -> None:
     add("hotter track, slow stops, retirement, pit lane closed", 40, {"track_temp_delta": 8, "pit_stop_extra": 2.0, "random_incidents": False,
                                                                      "retirements": {"W": 46}, "pit_closed_laps": [42, 43]})
     add("rival stays out to the flag", 35, {"no_reaction": ["W"]}, [])
+    # whole-page answers: the response as the server defers it, and the same response finished by Python
+    from app import nextrace, weather
+    w = rs.state(key)["rows"][0]["driver_number"]
+    deferred = []
+
+    def big(d):
+        for j in d["deferred"]["jobs"]:
+            j["package"]["n"] = N
+        return d
+
+    def runs(d, keep=False):
+        return weather.compare_finish(d["deferred"]["jobs"], [sim.run_package(j["package"]) for j in d["deferred"]["jobs"]], keep)
+
+    def record(name, d, finish):
+        d = big(d)
+        sent = sv.clean(d)
+        dd = d.pop("deferred")
+        deferred.append({"name": name, "data": sent, "python": sv.clean(finish(d, dd))})
+        print("deferred:", name, flush=True)
+
+    for lap, drv in ((33, w), (20, 4)):
+        record(f"strategy lap {lap} #{drv}", sv._strategy_view(sim.context(key, lap), key, drv, {"overview", "plans"}, defer=True),
+               lambda d, dd: sv.strategy_finish(d, dd["opts"], dd["windows"], runs({"deferred": dd})))
+    for lap, drv, body in ((33, w, {"duration": 4}), (45, 4, {"duration": 3, "pit_closed": True})):
+        record(f"safety car lap {lap} #{drv}", sv.safety_car(key, lap, drv, body, defer=True), lambda d, dd: sv.safety_car_finish(d, runs({"deferred": dd})))
+    for body in ({}, {"safety_car": {"lap": 20, "type": "SC"}, "rain_in_min": 20, "rain_intensity": 0.5, "rain_duration_min": 20, "grid_position": 5}):
+        record(f"next race {json.dumps(body)[:40]}", nextrace._simulate(body, defer=True),
+               lambda d, dd: nextrace.next_finish(d, dd["options"], dd["grid_of"], dd["n_sims"], runs({"deferred": dd}, True)))
     out = Path(__file__).resolve().parents[2] / "frontend" / "tests" / "sim-fixture.json"
     out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps({"n": N, "cases": cases}, separators=(",", ":")))
+    out.write_text(json.dumps({"n": N, "cases": cases, "deferred": deferred}, separators=(",", ":")))
     print("wrote", out, out.stat().st_size, "bytes")
 
 

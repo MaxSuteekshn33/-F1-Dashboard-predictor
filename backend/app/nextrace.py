@@ -185,6 +185,10 @@ def _fingerprint() -> list:
 
 
 def simulate(body: dict) -> dict:
+    """With body["defer"], a result that is not already stored comes back without the simulations, as packages
+    for the visitor's browser to run; a stored result is returned whole either way."""
+    defer = bool(body.get("defer"))
+    body = {k: v for k, v in body.items() if k != "defer"}
     key = json.dumps(body, sort_keys=True, default=str)
     hit = _result_cache.get(key)
     if hit and hit[0] > time.time():
@@ -192,6 +196,8 @@ def simulate(body: dict) -> dict:
     skey = store.plain_key("next_simulate", key, _fingerprint())
     out = store.get(skey)
     if out is None:
+        if defer:
+            return _simulate(body, defer=True)
         out = sv.clean(_simulate(body))
         store.put(skey, "next_simulate", out)
     if len(_result_cache) > 40:
@@ -200,7 +206,7 @@ def simulate(body: dict) -> dict:
     return out
 
 
-def _simulate(body: dict) -> dict:
+def _simulate(body: dict, defer: bool = False) -> dict:
     """Compare starting tyres and stop counts for one driver in the upcoming race, under optional what-ifs:
     {driver_id, grid_position, safety_car:{lap,type,duration}, rain_in_min, rain_intensity, rain_duration_min,
      use_forecast_rain, track_temp_delta, random_incidents, n_sims}."""
@@ -242,22 +248,31 @@ def _simulate(body: dict) -> dict:
                     found.append({"label": f"{seq} · {k}-stop", "start": c0, "stops": k, "plan": [(x["lap"], x["compound"]) for x in p["plan"]], "model_time": p["rel_time"]})
         _plan_cache[pkey] = found
     options = [dict(o, scenario={"overrides": {num: {"compound": o["start"], "tyre_age": 0}}}) for o in _plan_cache[pkey]]
-    best_model = min(o["model_time"] for o in options)
     n_sims = int(body.get("n_sims", 1000))
-    table = weather.compare(ctx, num, options, scn, n=n_sims, keep_field=True)
-    by = {o["label"]: o for o in options}
+    out = {"race": ctx["race"], "total_laps": total, "focus": {"driver_id": me["driver_id"], "code": me["code"], "grid": me["grid"]},
+           "field_start_compound": ctx["start_compound"], "notes": notes,
+           "caveat": "A pre-race simulation: no car has turned a race lap yet. Treat it as a way to compare plans under stated conditions, not as a forecast of the result."}
+    jobs = weather.compare_jobs(ctx, num, options, scn, n=n_sims)
+    info = [{"label": o["label"], "start": o["start"], "stops": o["stops"], "model_time": o["model_time"]} for o in options]
+    grid_of = {r["driver_number"]: r["grid"] for r in st["rows"]}
+    if defer:       # the visitor's browser runs the simulations and applies `next_finish` (lib/sim.ts)
+        out["deferred"] = {"kind": "next", "jobs": jobs, "options": info, "grid_of": grid_of, "n_sims": n_sims}
+        return out
+    return next_finish(out, info, grid_of, n_sims, weather.compare_finish(jobs, [sim.run_package(j["package"]) for j in jobs], keep_field=True))
+
+
+def next_finish(out: dict, info: list[dict], grid_of: dict, n_sims: int, table: list[dict]) -> dict:
+    best_model = min(o["model_time"] for o in info)
+    by = {o["label"]: o for o in info}
     for t in table:
         o = by[t["label"]]
         t["start"], t["stops"], t["model_delta"] = o["start"], o["stops"], round(o["model_time"] - best_model, 2)
     best = min(table, key=lambda t: (round(t["exp_pos"], 1), t["time_vs_best"] or 0)) if table else None
     # projected order for the whole field: taken from the best plan's own simulation (no extra run)
-    grid_of = {r["driver_number"]: r["grid"] for r in st["rows"]}
     field = sorted([{"code": d["code"], "team_colour": d["team_colour"], "p_win": round(d["p_win"], 4), "p_podium": round(d["p_podium"], 4),
                      "exp_pos": round(d["exp_pos"], 2), "grid": grid_of.get(d["driver_number"])} for d in (best or {}).get("_field", [])], key=lambda d: d["exp_pos"])
-    base = {"wetness_path": best["wetness_path"] if best else None, "n_sims": best["n_sims"] if best else n_sims}
     for t in table:
         t.pop("_field", None)
-    return {"race": ctx["race"], "total_laps": total, "focus": {"driver_id": me["driver_id"], "code": me["code"], "grid": me["grid"]},
-            "field_start_compound": ctx["start_compound"], "options": table, "best": best["label"] if best else None, "field": field,
-            "wetness_path": base.get("wetness_path"), "n_sims": base.get("n_sims"), "notes": notes,
-            "caveat": "A pre-race simulation: no car has turned a race lap yet. Treat it as a way to compare plans under stated conditions, not as a forecast of the result."}
+    out.update(options=table, best=best["label"] if best else None, field=field,
+               wetness_path=best["wetness_path"] if best else None, n_sims=best["n_sims"] if best else n_sims)
+    return out

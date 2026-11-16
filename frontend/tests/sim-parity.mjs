@@ -2,7 +2,7 @@
 // Fixture: backend/tests/make_sim_fixture.py (20,000 runs per case on both sides).
 // Run: node --experimental-strip-types tests/sim-parity.mjs
 import { readFileSync } from "node:fs";
-import { runPackage } from "../lib/sim.ts";
+import { runPackage, finishDeferred } from "../lib/sim.ts";
 
 const fx = JSON.parse(readFileSync(new URL("./sim-fixture.json", import.meta.url)));
 // Allowed differences: several standard errors of the difference between two independent 20,000-run estimates.
@@ -28,6 +28,46 @@ for (const c of fx.cases) {
   const hist = Math.max(...r.focus.pos_hist.map((x, i) => Math.abs(x - c.python.focus.pos_hist[i])));
   if (hist > 0.02) { failures++; console.log(`  ✗ ${c.name} · focus position histogram differs by ${hist.toFixed(4)}`); }
   console.log(`${c.name}: ${fx.n} runs in ${ms.toFixed(0)} ms · largest differences — win ${worst.p_win.toFixed(4)}, finish ${worst.exp_pos.toFixed(3)}, time ${(worst.exp_time ?? 0).toFixed(2)} s, stops ${worst.mean_stops.toFixed(3)}, traffic ${worst.blocked_laps.toFixed(2)} laps`);
+}
+// Whole-page answers (strategy, Safety Car, next race): the browser finishes a deferred response; the result must
+// have the same shape as Python's and the same numbers within Monte Carlo error.
+const NUM_TOL = [[/p_win$|p_podium$|p_win_se$/, 0.025], [/pos_hist/, 0.025], [/exp_pos$|pit_minus_stay_positions$/, 0.25], [/pos_p10$|pos_p90$/, 1], [/risk_pos_sd$/, 0.15],
+  [/blocked_laps$|traffic_laps$/, 0.5], [/exp_time$|time_vs_best$|time_vs_first$|exp_time_delta$/, 2.0], [/paired_se$/, 0.3]];
+const CHOICE = /recommended$|\/best$|\/better$|\/window\//;      // which near-tied option wins may differ; checked separately
+function same(a, b, path, name) {
+  if (CHOICE.test(path)) return;
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") {
+    if (typeof a === "number" && typeof b === "number") {
+      const tol = (NUM_TOL.find(([re]) => re.test(path)) || [0, 1e-9])[1]; checks++;
+      if (Math.abs(a - b) > tol) { failures++; console.log(`  ✗ ${name} · ${path}: python ${a} vs browser ${b} (allowed ±${tol})`); }
+    } else if (a !== b) { failures++; console.log(`  ✗ ${name} · ${path}: python ${JSON.stringify(a)} vs browser ${JSON.stringify(b)}`); }
+    return;
+  }
+  const ka = Object.keys(a).filter((k) => !CHOICE.test(path + "/" + k)), kb = Object.keys(b).filter((k) => k !== "engine" && !CHOICE.test(path + "/" + k));
+  for (const k of new Set([...ka, ...kb])) {
+    if (!(k in a) || !(k in b)) { failures++; console.log(`  ✗ ${name} · ${path}/${k}: present on one side only`); continue; }
+    same(a[k], b[k], `${path}/${k}`, name);
+  }
+}
+for (const c of fx.deferred) {
+  const t0 = performance.now();
+  const js = JSON.parse(JSON.stringify(finishDeferred(c.data)));
+  const before = failures;
+  // the field table is sorted by expected finish, so compare it by driver rather than by row
+  const py = structuredClone(c.python);
+  for (const o of [py, js]) if (o.field) o.field = Object.fromEntries(o.field.map((d) => [d.code, d]));
+  same(py, js, "", c.name);
+  // the chosen option must be Python's choice, or one Python scores as a near-tie with it
+  const pick = (o) => o.best ?? (o.strategies || []).find((x) => x.recommended)?.label ?? null;
+  const rows = c.python.options || c.python.strategies || [];
+  const pos = (label) => rows.find((x) => x.label === label)?.exp_pos;
+  const a = pick(c.python), b = pick(js);
+  if (a !== b && !(Math.abs(pos(a) - pos(b)) <= 0.25)) { failures++; console.log(`  ✗ ${c.name}: python picks ${a}, browser picks ${b}`); }
+  for (const k of Object.keys(c.python.verdicts || {})) {
+    const v = c.python.verdicts[k], w = js.verdicts[k];
+    if (v.better !== w.better && Math.abs(v.pit_minus_stay_positions) > 0.25) { failures++; console.log(`  ✗ ${c.name}: verdict ${k} python ${v.better}, browser ${w.better}`); }
+  }
+  console.log(`${c.name}: ${failures === before ? "matches" : "DIFFERS"} · pick python ${a ?? "—"} / browser ${b ?? "—"} · ${(performance.now() - t0).toFixed(0)} ms`);
 }
 console.log(failures ? `\n${failures} differences beyond tolerance (${checks} checks)` : `\nAll ${checks} checks within tolerance.`);
 process.exit(failures ? 1 : 0);

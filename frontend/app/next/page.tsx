@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Bar as RBar, BarChart, CartesianGrid, Cell, ErrorBar, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api, useApi } from "@/lib/api";
+import { resolveDeferred } from "@/lib/browserSim";
 import { Bar, ChartTip, Driver, GRID, Notes, Panel, Stat, State, Tabs, Tag, Tyre, dt, num, pct, signed, teamColour } from "@/components/ui";
 import { PositionDist } from "@/components/Options";
 
@@ -31,8 +32,9 @@ export default function NextRace() {
   const race = d.race, c = d.circuit, p = d.prediction, fc = d.forecast, hz = d.base_rates;
   const run = () => {
     setBusy(true); setErr(null);
-    api("/api/next/simulate", { driver_id: driver, grid_position: grid, random_incidents: incidents, track_temp_delta: temp || undefined,
-      ...(sc ? { safety_car: { lap: scLap, type: scType } } : {}), ...(rain ? { rain_in_min: rainIn, rain_intensity: rainInt, rain_duration_min: rainDur } : {}) })
+    const q = { driver_id: driver, grid_position: grid, random_incidents: incidents, track_temp_delta: temp || undefined,
+      ...(sc ? { safety_car: { lap: scLap, type: scType } } : {}), ...(rain ? { rain_in_min: rainIn, rain_intensity: rainInt, rain_duration_min: rainDur } : {}) };
+    api<any>("/api/next/simulate", { ...q, defer: true }).then((x) => resolveDeferred<any>(x, () => api("/api/next/simulate", q)))
       .then(setRes).catch((e) => setErr(String(e.message))).finally(() => setBusy(false));
   };
   const top = p.top5.map((x: any) => ({ code: `${x.code}  ${(x.p_win * 100).toFixed(1)}%`, p: x.p_win * 100, colour: teamColour(x.colour), err: x.ci ? [Math.max(0, x.p_win - x.ci.lo) * 100, Math.max(0, x.ci.hi - x.p_win) * 100] : [0, 0] }));
@@ -118,7 +120,7 @@ export default function NextRace() {
 
         {busy && !res && <Panel title="Simulating"><State loading /></Panel>}
         {res && (<>
-          <Panel title={`Plans for ${res.focus.code} from P${res.focus.grid}`} tags={["MODEL"]} pad={false} note={<>{res.n_sims} simulated races per plan with identical random futures; rivals run their own best plan (all starting on {String(res.field_start_compound).toLowerCase()}s). “Model Δ” is the tyre-and-pit arithmetic alone; “Sim Δ” adds traffic, incidents and weather. Expected finish averages over every simulation, including retirements.</>}>
+          <Panel title={`Plans for ${res.focus.code} from P${res.focus.grid}`} tags={["MODEL"]} pad={false} note={<>{res.n_sims} simulated races per plan{res.engine === "browser" ? ", run in your browser," : ""} with identical random futures; rivals run their own best plan (all starting on {String(res.field_start_compound).toLowerCase()}s). “Model Δ” is the tyre-and-pit arithmetic alone; “Sim Δ” adds traffic, incidents and weather. Expected finish averages over every simulation, including retirements.</>}>
             <div className="overflow-auto"><table className="grid-t"><thead><tr><th>Plan</th><th>Start</th><th>Stops</th><th className="r">Expected finish</th><th className="r">Range</th><th className="r">Win</th><th className="r">Podium</th><th className="r">Model Δ</th><th className="r">Sim Δ</th><th className="r">Laps in traffic</th></tr></thead>
               <tbody>{res.options.map((o: any) => <tr key={o.label} className={o.label === res.best ? "!bg-good/10" : ""}>
                 <td className="font-semibold">{o.stops}-stop{o.label === res.best && <span className="ml-2 rounded-full bg-good px-2 py-[1px] text-[9px] font-bold text-black">BEST</span>}</td><td><Tyre compound={o.start} /></td>

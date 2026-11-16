@@ -263,9 +263,10 @@ def inrace_prediction(session_key: int, lap: int | None = None) -> dict:
 _strategy_cache: dict = {}
 
 
-def strategy_view(session_key: int, lap: int | None, driver: int | None, parts: str = "overview,plans") -> dict:
+def strategy_view(session_key: int, lap: int | None, driver: int | None, parts: str = "overview,plans", defer: bool = False) -> dict:
     """`parts`: "overview" (tyre model, pit loss, stints, undercuts, rivals — quick) and/or "plans" (optimised
-    strategies evaluated by Monte Carlo — the slow part). Results are cached per race state."""
+    strategies evaluated by Monte Carlo — the slow part). Results are cached per race state. With `defer`, a
+    result that is not already cached comes back without the simulations, as packages for the browser to run."""
     ctx = sim.context(session_key, lap)
     st, m = ctx["st"], ctx["m"]
     want = {x.strip() for x in parts.split(",")}
@@ -275,6 +276,8 @@ def strategy_view(session_key: int, lap: int | None, driver: int | None, parts: 
     hit = _strategy_cache.get(ck)
     if hit and hit[0] > time.time():
         return hit[1]
+    if defer and "plans" in want:
+        return _strategy_view(ctx, session_key, driver, want, defer=True)
     out = _strategy_view(ctx, session_key, driver, want)
     if len(_strategy_cache) > 60:
         _strategy_cache.clear()
@@ -282,7 +285,7 @@ def strategy_view(session_key: int, lap: int | None, driver: int | None, parts: 
     return out
 
 
-def _strategy_view(ctx: dict, session_key: int, driver: int | None, want: set) -> dict:
+def _strategy_view(ctx: dict, session_key: int, driver: int | None, want: set, defer: bool = False) -> dict:
     st, m = ctx["st"], ctx["m"]
     total = st["total_laps"] or st["max_lap"]
     run = [r for r in st["rows"] if r["status"] == "RUNNING"]
@@ -331,8 +334,19 @@ def _strategy_view(ctx: dict, session_key: int, driver: int | None, want: set) -
         start_lap = nxt[0][0]
         out["note"] = f"Car is on wet-weather tyres: dry strategies start from the modelled slick crossover (lap {start_lap}). See Weather Intelligence."
     opts = sg.strategies(m, start_lap, total, None if on_wet else me["compound"], me["tyre_age"] or 0, me["compounds_used"])
-    scn = {"random_incidents": True}
-    table = weather.compare(ctx, me["driver_number"], [{"label": o["label"], "plan": [(x["lap"], x["compound"]) for x in o["plan"]]} for o in opts], scn)
+    options = [{"label": o["label"], "plan": [(x["lap"], x["compound"]) for x in o["plan"]]} for o in opts]
+    # pit window of each legal plan (cheap), so whichever plan the simulations favour has its window ready
+    windows = {o["label"]: sg.window(m, o, st["lap"], total, me["compound"], me["tyre_age"] or 0) for o in opts if o["rule_ok"]} if not on_wet else {}
+    jobs = weather.compare_jobs(ctx, me["driver_number"], options, {"random_incidents": True})
+    out["method"] = ("Stop laps and compounds: exact search minimising modelled remaining race time per stop count (same optimum as the OR-Tools CP-SAT model). "
+                     "Expected position / win probability / traffic: Monte Carlo over the whole field with rivals on their own optimal plans.")
+    if defer:       # the visitor's browser runs the simulations and applies `strategy_finish` (lib/sim.ts)
+        out["deferred"] = {"kind": "strategy", "jobs": jobs, "opts": opts, "windows": windows}
+        return out
+    return strategy_finish(out, opts, windows, weather.compare_finish(jobs, [sim.run_package(j["package"]) for j in jobs]))
+
+
+def strategy_finish(out: dict, opts: list[dict], windows: dict, table: list[dict]) -> dict:
     tm = {t["label"]: t for t in table}
     for o in opts:
         t = tm.get(o["label"], {})
@@ -347,17 +361,14 @@ def _strategy_view(ctx: dict, session_key: int, driver: int | None, want: set) -
     if legal:
         best = min(legal, key=lambda s: (round(s["exp_pos"], 1), s["exp_time_delta"] or 0))
         best["recommended"] = True
-        bo = next(o for o in opts if o["label"] == best["label"])
-        if not on_wet:
-            out["window"] = sg.window(m, bo, st["lap"], total, me["compound"], me["tyre_age"] or 0)
+        if best["label"] in windows:
+            out["window"] = windows[best["label"]]
     out["n_sims"] = table[0]["n_sims"] if table else None
-    out["method"] = ("Stop laps and compounds: OR-Tools CP-SAT minimising modelled remaining race time per stop count. "
-                     "Expected position / win probability / traffic: Monte Carlo over the whole field with rivals on their own optimal plans.")
     return out
 
 
 # ---------------------------------------------------------------- 8. safety car & incidents
-def safety_car(session_key: int, lap: int | None, driver: int | None, body: dict | None = None) -> dict:
+def safety_car(session_key: int, lap: int | None, driver: int | None, body: dict | None = None, defer: bool = False) -> dict:
     body = body or {}
     ctx = sim.context(session_key, lap)
     st, m, hz = ctx["st"], ctx["m"], ctx["hz"]
@@ -391,17 +402,25 @@ def safety_car(session_key: int, lap: int | None, driver: int | None, body: dict
         {"label": f"Pit under green (lap {nxt}, {new.lower()})", "plan": [(nxt, new)], "scenario": {"random_incidents": False}},
         {"label": "Stay out under green (own optimal plan)", "plan": None, "scenario": {"random_incidents": False}},
     ]
-    table = weather.compare(ctx, me["driver_number"], options, {"random_incidents": False})
     pl = m["pit_loss"]
-    out.update(options=table, pit_loss={"green": round(pl, 1), "sc": round(pl * sg.SC_PIT_FACTOR["SC"], 1), "vsc": round(pl * sg.SC_PIT_FACTOR["VSC"], 1),
-                                        "saved_sc": round(pl * (1 - sg.SC_PIT_FACTOR["SC"]), 1), "saved_vsc": round(pl * (1 - sg.SC_PIT_FACTOR["VSC"]), 1),
-                                        "source": m["pit_loss_source"], "factor_note": "ASSUMPTION: a stop costs 45% (SC) / 62% (VSC) of the green-flag loss."})
-    pairs = {"sc": (table[0], table[1]), "vsc": (table[2], table[3]), "green": (table[4], table[5])} if len(table) == 6 else {}
-    out["verdicts"] = {k: {"pit_minus_stay_positions": round(a["exp_pos"] - b["exp_pos"], 2), "better": "PIT" if a["exp_pos"] < b["exp_pos"] else "STAY OUT",
-                           "pit": a["label"], "stay": b["label"]} for k, (a, b) in pairs.items()}
+    out.update(pit_loss={"green": round(pl, 1), "sc": round(pl * sg.SC_PIT_FACTOR["SC"], 1), "vsc": round(pl * sg.SC_PIT_FACTOR["VSC"], 1),
+                         "saved_sc": round(pl * (1 - sg.SC_PIT_FACTOR["SC"]), 1), "saved_vsc": round(pl * (1 - sg.SC_PIT_FACTOR["VSC"]), 1),
+                         "source": m["pit_loss_source"], "factor_note": "ASSUMPTION: a stop costs 45% (SC) / 62% (VSC) of the green-flag loss."})
     out["extras"] = {"red_flag": "A red flag allows a free tyre change for everyone, which removes the advantage of having pitted — not simulated lap-by-lap; treat as neutralising any pit-stop gap.",
                      "restart": "After the Safety Car the field restarts bunched (0.9 s spacing in the simulator); cars on fresher tyres attack immediately.",
                      "pit_lane_closure": "Set `pit_closed` to block stops on the first neutralised lap.", "retirement": "Set `retire` to a driver number to remove that car as the trigger incident."}
+    jobs = weather.compare_jobs(ctx, me["driver_number"], options, {"random_incidents": False})
+    if defer:       # the visitor's browser runs the simulations and applies `safety_car_finish` (lib/sim.ts)
+        out["deferred"] = {"kind": "safetycar", "jobs": jobs}
+        return out
+    return safety_car_finish(out, weather.compare_finish(jobs, [sim.run_package(j["package"]) for j in jobs]))
+
+
+def safety_car_finish(out: dict, table: list[dict]) -> dict:
+    out["options"] = table
+    pairs = {"sc": (table[0], table[1]), "vsc": (table[2], table[3]), "green": (table[4], table[5])} if len(table) == 6 else {}
+    out["verdicts"] = {k: {"pit_minus_stay_positions": round(a["exp_pos"] - b["exp_pos"], 2), "better": "PIT" if a["exp_pos"] < b["exp_pos"] else "STAY OUT",
+                           "pit": a["label"], "stay": b["label"]} for k, (a, b) in pairs.items()}
     return out
 
 

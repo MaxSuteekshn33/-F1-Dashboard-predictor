@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
-import { useApi, useRace } from "@/lib/api";
+import { api, useApi, useRace } from "@/lib/api";
+import { useResolved } from "@/lib/browserSim";
 import { COMPOUND, ChartTip, Driver, GRID, Notes, Panel, Stat, State, Tag, Tyre, fmtLap, num, pct, signed, Tabs } from "@/components/ui";
 
 function Stints({ stints, total, lap, plan }: { stints: any[]; total: number; lap: number; plan?: any[] }) {
@@ -23,7 +24,10 @@ export default function Strategy() {
   // Two requests: a quick overview (tyres, pit loss, stints, rivals) and the simulated plans, which take longer.
   const base = r.sessionKey && r.driver ? `/api/strategy?${r.q}&driver=${r.driver}` : null;
   const ov = useApi<any>(base && `${base}&parts=overview`, r.tick);
-  const pl = useApi<any>(base && `${base}&parts=plans`, r.tick);
+  // `defer=1`: a stored answer comes back whole; otherwise the server sends the inputs and this browser runs the simulations.
+  const plRaw = useApi<any>(base && `${base}&parts=plans&defer=1`, r.tick);
+  const done = useResolved<any>(plRaw.data, () => api(`${base}&parts=plans`));
+  const pl = { ...plRaw, data: done.data, error: plRaw.error || done.error };
   const fresh = pl.data && (!ov.data || (pl.data.lap === ov.data.lap && pl.data.focus === ov.data.focus));
   const s = fresh ? pl.data : ov.data;
   const plansPending = !fresh && !pl.error && !s?.note;
@@ -48,7 +52,7 @@ export default function Strategy() {
 
       <Tabs tabs={[["plan", "Strategy plan"], ["tyres", "Tyres & rivals"], ["stints", "Stint history"]] as [string, string][]} value={tab} onChange={setTab} />
       {tab === "plan" && (<div className="page-in space-y-5">
-      <Panel title={`Strategy options for ${s.focus_code ?? "—"} from lap ${s.lap}`} tags={["MODEL"]} pad={false} note={<>{s.method} {s.n_sims ? `${s.n_sims} simulations per option, same random futures for each.` : ""} “Model Δ” is the optimiser's deterministic time; “Sim Δ” includes traffic, incidents and rivals' stops.</>}>
+      <Panel title={`Strategy options for ${s.focus_code ?? "—"} from lap ${s.lap}`} tags={["MODEL"]} pad={false} note={<>{s.method} {s.n_sims ? `${s.n_sims} simulations per option${s.engine === "browser" ? ", run in your browser" : ""}, same random futures for each.` : ""} “Model Δ” is the optimiser's deterministic time; “Sim Δ” includes traffic, incidents and rivals' stops.</>}>
         {plansPending && <div className="px-5 pb-5"><div className="mb-2 text-[11.5px] text-dim">Optimising stop laps and simulating each plan across the field…</div><State loading /></div>}
         {pl.error && !fresh && <div className="px-5 pb-5"><State error={`Strategy plans: ${pl.error}`} /></div>}
         <div className={`overflow-auto ${plansPending || (pl.error && !fresh) ? "hidden" : ""}`}><table className="grid-t">
