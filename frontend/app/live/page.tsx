@@ -142,6 +142,16 @@ export default function LiveRace() {
           </Panel>
         </div>
       </div>
+      {mode !== "REHEARSAL" && live.stream && (
+        <div className="glass flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl px-5 py-3 text-[11.5px] text-dim">
+          <span className="inline-flex items-center gap-1.5 font-medium" style={{ color: live.stream.healthy ? "#2fbf71" : "#e0a100" }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: live.stream.healthy ? "#2fbf71" : "#e0a100" }} />
+            {live.stream.healthy ? "Real-time stream connected" : live.stream.running ? "Stream connecting — polling meanwhile" : "Polling OpenF1 every few seconds"}</span>
+          {live.stream.messages > 0 && <span className="num">{live.stream.messages.toLocaleString()} messages · {live.stream.stored.toLocaleString()} stored</span>}
+          {live.stream.last_error && <span className="text-warn">{live.stream.last_error}</span>}
+          <span className="text-faint">Source: OpenF1 {live.stream.healthy ? "MQTT, with a REST check every 90 s" : "REST"}</span>
+        </div>
+      )}
       <Notes title="About this page" items={["Timing, tyres, weather and race-control messages are recorded data. Win chances and strategy calls are model output and are recalculated each lap.",
         mode === "REHEARSAL" ? "This is a rehearsal: a stored race replayed at speed. Nothing after the simulated moment is used, so it behaves as the live page would have during that race." : "During a real race the page updates as each new lap arrives.",
         "On a small server the win chances and the strategy call can take 10–20 seconds to catch up after a new lap; during a fast rehearsal they may skip laps."]} />

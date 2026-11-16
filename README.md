@@ -85,6 +85,7 @@ The hosted setup has not been deployed or tested from this repository.
 | `APEX_BOOTSTRAP` | 0 | 1 = build the database and models on first start (`quick` = latest race only) |
 | `APEX_MAX_CONCURRENCY` | 2 | heavy API requests processed at once (1 on small hosts) |
 | `NEXT_PUBLIC_API_URL` | derived from `NEXT_PUBLIC_WS_URL` | front end calls the API directly at this address instead of through `/api` rewrites |
+| `APEX_MQTT` | 1 | during a session, receive OpenF1's real-time MQTT stream (needs the paid sign-in); 0 = REST polling only |
 | `APEX_ADMIN_TOKEN` | unset | when set, starting or stopping a rehearsal needs this code (set it on any public deployment) |
 | `APEX_WARM` | 1 | pre-compute the Next Race prediction and driver pace right after start-up |
 | `APEX_AUTO_RETRAIN` | 0 | 1 = refresh data and retrain on start-up when new races exist |
@@ -115,7 +116,7 @@ to that lap. That is also how in-race models are validated without leakage.
 
 | Source | Used for | Notes |
 |---|---|---|
-| [OpenF1](https://openf1.org/docs/) | laps, stints, pits, positions, track weather, race control, car telemetry, car x/y | 2023 onwards. Free tier publishes after the session; real-time needs a paid account |
+| [OpenF1](https://openf1.org/docs/) | laps, stints, pits, positions, track weather, race control, car telemetry, car x/y | 2023 onwards. Free tier publishes after the session. With a paid account the server signs in, receives the real-time MQTT stream during sessions (the provider's recommended route) and keeps REST polling as fallback and 90-second reconciliation |
 | [F1DB](https://github.com/f1db/f1db) | results, qualifying, grids, pit stops (1994+), standings, 1950→today | bulk release, loaded into the database |
 | [Jolpica](https://github.com/jolpica/jolpica-f1) | qualifying result for the upcoming race, before the F1DB release catches up | Ergast-compatible |
 | [Open-Meteo](https://open-meteo.com/) | 15-minute precipitation, probability, wind for the circuit area | a weather model, never treated as a track measurement; snapshots are stored and reused if the API is unavailable |

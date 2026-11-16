@@ -52,6 +52,12 @@ export default function Telemetry() {
   const { data: laps, error: lapErr } = useApi<any>(r.sessionKey ? `/api/telemetry/laps?${r.q}` : null, r.tick);
   const { data: map, loading: mapLoading, error: mapErr } = useApi<any>(r.sessionKey ? `/api/telemetry/track?${r.q}` : null, r.tick);
   const { data: pace } = useApi<any>(r.sessionKey ? `/api/telemetry/pace?${r.q}` : null, r.tick);
+  // During a live session with the real-time stream, car positions refresh every two seconds.
+  const isLive = r.cmd?.mode?.mode === "LIVE" && r.lap === null;
+  const [beat, setBeat] = useState(0);
+  useEffect(() => { if (!isLive) return; const t = setInterval(() => setBeat((x) => x + 1), 2000); return () => clearInterval(t); }, [isLive]);
+  const { data: liveCars } = useApi<any>(isLive && r.sessionKey ? `/api/telemetry/cars?session_key=${r.sessionKey}` : null, beat);
+  const streaming = isLive && liveCars?.streaming && liveCars.cars?.length > 0;
   const [sel, setSel] = useState<{ d1?: number; l1?: number; d2?: number; l2?: number }>({});
   const drivers: any[] = laps?.drivers || [];
   const byNum = useMemo(() => Object.fromEntries(drivers.map((d) => [d.driver_number, d])), [drivers]);
@@ -90,7 +96,8 @@ export default function Telemetry() {
       {tab === "track" && (<div className="page-in space-y-5">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <Panel title="Circuit map & car positions" tags={["OBSERVED"]} note={map?.available ? <>Outline drawn from car #{map.outline_ref}. Sectors: <span style={{ color: SECTOR[0] }}>S1</span> · <span style={{ color: SECTOR[1] }}>S2</span> · <span style={{ color: SECTOR[2] }}>S3</span>. Positions at the end of lap {map.lap}. {map.limitations?.[0]}</> : undefined}>
-          <State loading={mapLoading} error={mapErr} empty={map && !map.available ? map.reason : null}>{map?.available && <TrackMap data={map} focus={r.driver} />}</State>
+          <State loading={mapLoading} error={mapErr} empty={map && !map.available ? map.reason : null}>{map?.available && <TrackMap data={streaming ? { ...map, cars: liveCars.cars } : map} focus={r.driver} />}</State>
+          {streaming && <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-good"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-good" />Live positions from the real-time stream, refreshed every 2 s</div>}
           {map?.note && <div className="mt-2 text-[11px] text-warn">{map.note}</div>}
         </Panel>
         <Panel title="Sector times — last completed lap" tags={["OBSERVED"]} pad={false}>

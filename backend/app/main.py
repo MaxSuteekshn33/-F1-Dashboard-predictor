@@ -4,7 +4,7 @@ import asyncio, os, threading, time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Body, Header
 from fastapi.middleware.cors import CORSMiddleware
-from . import db, live, racestate as rs, service as sv, weather, retrain, ingest, bootstrap, nextrace, clock
+from . import db, live, racestate as rs, service as sv, weather, retrain, ingest, bootstrap, nextrace, clock, stream
 from .config import CORS_ORIGINS
 
 
@@ -122,6 +122,18 @@ def tel_track(session_key: int | None = None, lap: int | None = None):
     return guard(sv.track_map, session_key or default_key(), lap)
 
 
+@app.get("/api/telemetry/cars")
+def tel_cars(session_key: int | None = None):
+    """Newest car positions from the real-time stream (empty when no stream is running — nothing is generated)."""
+    key = session_key or default_key()
+    cars = stream.live_cars(key)
+    info = {}
+    if cars:
+        info = {r["driver_number"]: r for r in rs.state(key)["rows"]}
+    return sv.clean({"streaming": stream.healthy(), "cars": [dict(c, code=info.get(c["driver_number"], {}).get("code"), team_colour=info.get(c["driver_number"], {}).get("team_colour"),
+                                                               position=info.get(c["driver_number"], {}).get("position")) for c in cars]})
+
+
 @app.get("/api/telemetry/pace")
 def tel_pace(session_key: int | None = None, lap: int | None = None):
     return guard(sv.pace_comparison, session_key or default_key(), lap)
@@ -181,6 +193,8 @@ def live_status():
     if openf1.auth_state["configured"] and openf1.auth_state["ok"] is None:
         openf1.headers()        # first look: try the paid sign-in once so its result can be reported
     out = {"now": time.time(), "current_session": cur, "next_session": nxt, "rehearsal": reh, "openf1_auth": dict(openf1.auth_state),
+           "stream": {**{k: stream.state[k] for k in ("enabled", "running", "connected", "last_message", "messages", "stored", "last_error", "connects")},
+                      "healthy": stream.healthy(), "by_topic": dict(stream.state["by_topic"])},
            "openf1_authenticated": bool(os.getenv("OPENF1_USERNAME")), "live_loop": {k: live.state.get(k) for k in ("last_poll", "last_error", "polls")},
            "rehearsal_needs_code": bool(os.getenv("APEX_ADMIN_TOKEN")), "mode": None, "session_key": None, "lap": None}
     key = reh["session_key"] if reh else (cur["session_key"] if cur and cur.get("session_type") == "Race" else None)
@@ -208,6 +222,16 @@ def rehearsal_start(body: dict = Body(default={}), x_admin_code: str | None = He
     except (ValueError, KeyError, IndexError) as e:
         raise HTTPException(400, str(e))
     return sv.clean(info)
+
+
+@app.post("/api/live/stream-test")
+def stream_test(x_admin_code: str | None = Header(default=None)):
+    """Check that this host can reach OpenF1's real-time broker with the configured account."""
+    _admin(x_admin_code)
+    if live.current_session():
+        return sv.clean({"ok": stream.state["connected"], "note": "A session is in progress; reporting the running stream.",
+                         **{k: stream.state[k] for k in ("running", "connected", "messages", "stored", "last_error")}})
+    return sv.clean(stream.probe())
 
 
 @app.delete("/api/live/rehearsal")

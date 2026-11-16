@@ -78,3 +78,27 @@ def test_fast_planner_matches_cp_sat_optimum():
         best = min(legal, key=lambda o: o["rel_time"])
         assert abs(f["rel_time"] - best["rel_time"]) < 0.01
         assert f["stops"] == best["stops"]
+
+
+def test_stream_handler_buffers_counts_and_tracks_cars():
+    import json, time
+    from app import stream
+    stream.locations.clear(); stream._buf.clear()
+    n0, r0 = stream.state["messages"], stream.state["rejected"]
+    stream.handle("v1/laps", json.dumps({"session_key": 1, "driver_number": 4, "lap_number": 7, "date_start": "2026-01-01T00:00:00+00:00"}))
+    stream.handle("v1/laps", json.dumps({"session_key": 1, "driver_number": 4, "lap_number": 7, "lap_duration": 90.1, "date_start": "2026-01-01T00:00:00+00:00"}))
+    stream.handle("v1/location", json.dumps({"session_key": 1, "driver_number": 4, "x": 10, "y": 20, "z": 0}))
+    stream.handle("v1/location", json.dumps({"session_key": 1, "driver_number": 5, "x": 0, "y": 0, "z": 0}))     # no fix yet: ignored
+    stream.handle("v1/car_data", json.dumps({"session_key": 1, "driver_number": 4, "speed": 300}))               # not subscribed/stored
+    stream.handle("v1/laps", b"{not json")
+    assert stream.state["messages"] - n0 == 5 and stream.state["rejected"] - r0 == 1
+    assert len(stream._buf["laps"]) == 2 and "car_data" not in stream._buf
+    assert [c["driver_number"] for c in stream.live_cars(1)] == [4] and stream.live_cars(2) == []
+    # both versions of the same lap collapse to the newest when normalised
+    from app.connectors.openf1 import normalise
+    f, _ = normalise("laps", list(stream._buf["laps"]))
+    assert len(f) == 1 and float(f.lap_duration.iloc[0]) == 90.1
+    stream._buf.clear(); stream.locations.clear()
+    stream.state.update(connected=True, last_message=time.time()); assert stream.healthy()
+    stream.state.update(last_message=time.time() - 300); assert not stream.healthy()
+    stream.state.update(connected=False, last_message=None)

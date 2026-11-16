@@ -2,7 +2,7 @@
 and notifies WebSocket subscribers. Outside a session it idles and only refreshes the session list."""
 from __future__ import annotations
 import asyncio, time
-from . import db, ingest, racestate as rs, clock
+from . import db, ingest, racestate as rs, clock, stream
 from .config import LIVE_POLL_SECONDS, IDLE_POLL_SECONDS
 from .connectors.base import SourceError
 
@@ -39,7 +39,17 @@ async def broadcast(msg: dict) -> None:
         subscribers.discard(ws)
 
 
+def _snapshot(cur: dict, new_laps: int) -> dict:
+    st = rs.state(cur["session_key"])
+    rain = (st.get("weather") or {}).get("rainfall")
+    changed_weather = state["weather_flag"] is not None and rain != state["weather_flag"]
+    state["weather_flag"] = rain
+    return {"session_key": cur["session_key"], "new_laps": new_laps, "lap": st["lap"], "mode": st["mode"]["mode"],
+            "track_status": st["track_status"], "weather_changed": changed_weather, "rainfall": rain}
+
+
 def _poll_once() -> dict | None:
+    """Full REST refresh of the current session (the fallback path, and the periodic reconciliation)."""
     cur = current_session()
     state["current"] = cur
     if not cur:
@@ -48,12 +58,24 @@ def _poll_once() -> dict | None:
     ingest.ingest_session(cur["session_key"], LIVE_ENDPOINTS)
     rs.load.clear()
     after = db.q("SELECT COUNT(*) AS n FROM of1_laps WHERE session_key=:k", k=cur["session_key"])[0]["n"]
-    st = rs.state(cur["session_key"])
-    rain = (st.get("weather") or {}).get("rainfall")
-    changed_weather = state["weather_flag"] is not None and rain != state["weather_flag"]
-    state["weather_flag"] = rain
-    return {"session_key": cur["session_key"], "new_laps": after - before, "lap": st["lap"], "mode": st["mode"]["mode"],
-            "track_status": st["track_status"], "weather_changed": changed_weather, "rainfall": rain}
+    state["last_rest_poll"] = time.time()
+    return _snapshot(cur, after - before)
+
+
+def _stream_tick() -> dict | None:
+    """Store whatever the MQTT stream delivered since the last tick."""
+    cur = current_session()
+    state["current"] = cur
+    if not cur:
+        return None
+    stored = stream.flush()
+    fresh = stream.take_fresh()
+    if not stored:
+        return {"session_key": cur["session_key"], "new_laps": 0, "weather_changed": False, "quiet": True}
+    rs.load.clear()
+    snap = _snapshot(cur, fresh.get("laps", 0) + fresh.get("position", 0) + fresh.get("race_control", 0) + fresh.get("pit", 0))
+    snap["stream"] = stored
+    return snap
 
 
 def start_rehearsal(session_key: int, speed: float = 10.0, start_lap: int = 1) -> dict:
@@ -98,13 +120,28 @@ async def loop() -> None:
             if time.time() - last_sessions > 6 * 3600:
                 await asyncio.to_thread(ingest.ingest_sessions, time.gmtime().tm_year)
                 last_sessions = time.time()
-            res = await asyncio.to_thread(_poll_once)
+            cur = current_session()
+            if cur and stream.ENABLED and not stream.state["running"]:
+                await asyncio.to_thread(stream.start)            # a session is on: open the real-time stream
+            if not cur and stream.state["running"]:
+                await asyncio.to_thread(stream.stop)
+            use_stream = bool(cur) and stream.healthy()
+            # REST: every few seconds when it is the only source; every 90 s as a reconciliation when the stream is healthy
+            rest_due = time.time() - (state.get("last_rest_poll") or 0) >= (90 if use_stream else LIVE_POLL_SECONDS)
+            res = None
+            if cur and stream.state["running"]:
+                stream.refresh_token_if_needed()
+                res = await asyncio.to_thread(_stream_tick)
+            if cur and rest_due:
+                rest = await asyncio.to_thread(_poll_once)
+                if rest and (rest["new_laps"] or rest["weather_changed"] or not res or res.get("quiet")):
+                    res = rest
             state["last_poll"] = time.time(); state["polls"] += 1; state["last_error"] = None
-            if res:
-                delay = LIVE_POLL_SECONDS
-                if res["new_laps"] or res["weather_changed"]:
-                    await broadcast({"type": "update", **res})          # clients refetch -> timing tower updates
-                if res["weather_changed"]:
+            if cur:
+                delay = 1.5 if stream.state["running"] else LIVE_POLL_SECONDS
+                if res and (res.get("new_laps") or res.get("weather_changed")):
+                    await broadcast({"type": "update", **{k: v for k, v in res.items() if k != "stream"}})   # clients refetch
+                if res and res.get("weather_changed"):
                     await broadcast({"type": "weather_alert", "rainfall": res["rainfall"], "session_key": res["session_key"],
                                      "message": "Track rain sensor changed state — weather scenarios recalculated."})
             else:

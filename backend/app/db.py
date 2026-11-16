@@ -52,6 +52,21 @@ def replace_rows(table: str, frame: pd.DataFrame, where: dict | None = None) -> 
     return len(frame)
 
 
+def upsert_rows(table: str, frame: pd.DataFrame, keys: list[str]) -> int:
+    """Insert rows, replacing any existing row with the same key (used for streamed records, where a later
+    message for the same lap or stint supersedes the earlier one)."""
+    if not len(frame):
+        return 0
+    with engine.begin() as c:
+        if inspect(c).has_table(table):
+            cond = " AND ".join(f"{k} = :{k}" for k in keys)
+            params = [{k: (None if pd.isna(v) else (v.item() if hasattr(v, "item") else v)) for k, v in zip(keys, row)}
+                      for row in frame[keys].itertuples(index=False, name=None)]
+            c.execute(text(f"DELETE FROM {table} WHERE {cond}"), params)
+        frame.to_sql(table, c, if_exists="append", index=False, chunksize=2000)
+    return len(frame)
+
+
 def index(table: str, cols: str) -> None:
     name = f"ix_{table}_{cols.replace(',', '_').replace(' ', '')}"
     try:

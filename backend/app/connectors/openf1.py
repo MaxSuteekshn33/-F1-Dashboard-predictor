@@ -102,43 +102,52 @@ class OpenF1(Connector):
         """Returns (validated frame, rejected-row count). Dates become epoch seconds; numeric fields are
         coerced; rows without their key fields are rejected; duplicates are removed."""
         raw = self.get(endpoint, query, ttl=ttl, empty_404=True)
-        cols = COLUMNS[endpoint]
-        if not isinstance(raw, list) or not raw:
-            return pd.DataFrame(columns=cols), 0
-        f = pd.DataFrame(raw).reindex(columns=cols)
-        for c in cols:
-            if c in DATE_COLS:
-                f[c] = to_epoch(f[c])
-        num = {"laps": ["lap_number", "lap_duration", "duration_sector_1", "duration_sector_2", "duration_sector_3",
-                        "i1_speed", "i2_speed", "st_speed"],
-               "pit": ["lap_number", "pit_duration", "stop_duration", "lane_duration"],
-               "intervals": [], "position": ["position"],
-               "weather": ["air_temperature", "track_temperature", "humidity", "pressure", "rainfall", "wind_speed", "wind_direction"],
-               "stints": ["lap_start", "lap_end", "tyre_age_at_start", "stint_number"],
-               "session_result": ["position", "number_of_laps", "points", "duration"],
-               "car_data": ["speed", "throttle", "brake", "n_gear", "rpm", "drs"], "location": ["x", "y", "z"]}
-        for c in num.get(endpoint, []):
-            f[c] = pd.to_numeric(f[c], errors="coerce")
-        if endpoint in ("intervals", "session_result"):
-            # "+1 LAP" style strings are kept as text; numeric gaps as text too -> parsed by consumers
-            for c in ("gap_to_leader", "interval"):
-                if c in f:
-                    f[c] = f[c].astype(str).where(f[c].notna(), None)
-        if endpoint == "laps":
-            f["is_pit_out_lap"] = f["is_pit_out_lap"].fillna(False).astype(int)
-        for c in ("dnf", "dns", "dsq"):
+        return normalise(endpoint, raw)
+
+
+# Natural key of each dataset: a later record with the same key replaces the earlier one.
+KEYS = {"sessions": ["session_key"], "drivers": ["session_key", "driver_number"],
+            "laps": ["session_key", "driver_number", "lap_number"],
+            "stints": ["session_key", "driver_number", "stint_number"], "pit": ["session_key", "driver_number", "date"],
+            "position": ["session_key", "driver_number", "date"], "intervals": ["session_key", "driver_number", "date"],
+            "weather": ["session_key", "date"], "race_control": ["session_key", "date", "message"],
+            "session_result": ["session_key", "driver_number"], "car_data": ["session_key", "driver_number", "date"],
+            "location": ["session_key", "driver_number", "date"]}
+
+
+def normalise(endpoint: str, raw) -> tuple[pd.DataFrame, int]:
+    """Validate and normalise raw OpenF1 records (from REST or the MQTT stream) into the stored schema."""
+    cols = COLUMNS[endpoint]
+    if not isinstance(raw, list) or not raw:
+        return pd.DataFrame(columns=cols), 0
+    f = pd.DataFrame(raw).reindex(columns=cols)
+    for c in cols:
+        if c in DATE_COLS:
+            f[c] = to_epoch(f[c])
+    num = {"laps": ["lap_number", "lap_duration", "duration_sector_1", "duration_sector_2", "duration_sector_3",
+                    "i1_speed", "i2_speed", "st_speed"],
+           "pit": ["lap_number", "pit_duration", "stop_duration", "lane_duration"],
+           "intervals": [], "position": ["position"],
+           "weather": ["air_temperature", "track_temperature", "humidity", "pressure", "rainfall", "wind_speed", "wind_direction"],
+           "stints": ["lap_start", "lap_end", "tyre_age_at_start", "stint_number"],
+           "session_result": ["position", "number_of_laps", "points", "duration"],
+           "car_data": ["speed", "throttle", "brake", "n_gear", "rpm", "drs"], "location": ["x", "y", "z"]}
+    for c in num.get(endpoint, []):
+        f[c] = pd.to_numeric(f[c], errors="coerce")
+    if endpoint in ("intervals", "session_result"):
+        # "+1 LAP" style strings are kept as text; numeric gaps as text too -> parsed by consumers
+        for c in ("gap_to_leader", "interval"):
             if c in f:
-                f[c] = f[c].fillna(False).astype(int)
-        keys = {"sessions": ["session_key"], "drivers": ["session_key", "driver_number"],
-                "laps": ["session_key", "driver_number", "lap_number"],
-                "stints": ["session_key", "driver_number", "stint_number"], "pit": ["session_key", "driver_number", "date"],
-                "position": ["session_key", "driver_number", "date"], "intervals": ["session_key", "driver_number", "date"],
-                "weather": ["session_key", "date"], "race_control": ["session_key", "date", "message"],
-                "session_result": ["session_key", "driver_number"], "car_data": ["session_key", "driver_number", "date"],
-                "location": ["session_key", "driver_number", "date"]}[endpoint]
-        n0 = len(f)
-        f = f.dropna(subset=[k for k in keys if k != "message"]).drop_duplicates(subset=keys, keep="last")
-        return f.reset_index(drop=True), n0 - len(f)
+                f[c] = f[c].astype(str).where(f[c].notna(), None)
+    if endpoint == "laps":
+        f["is_pit_out_lap"] = f["is_pit_out_lap"].fillna(False).astype(int)
+    for c in ("dnf", "dns", "dsq"):
+        if c in f:
+            f[c] = f[c].fillna(False).astype(int)
+    keys = KEYS[endpoint]
+    n0 = len(f)
+    f = f.dropna(subset=[k for k in keys if k != "message"]).drop_duplicates(subset=keys, keep="last")
+    return f.reset_index(drop=True), n0 - len(f)
 
 
 openf1 = OpenF1()
