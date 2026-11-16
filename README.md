@@ -71,6 +71,15 @@ What the free plan means:
 
 The hosted setup has not been deployed or tested from this repository.
 
+### Speed on a small host
+
+None of these change a result — the simulations keep their full run count and seeds.
+
+- **Stays awake.** On Render the server requests its own public address every nine minutes (`APEX_KEEP_AWAKE=0` turns it off), and `.github/workflows/keep-awake.yml` pings it every ten. A free instance then runs all month (about 720 of the 750 free hours).
+- **Answers worked out at build time.** `python -m app.precompute` runs while the image is built and stores the common answers for the latest race (every lap for the winner, wider spacing for the rest) in `precomputed.db`. A stored answer is byte-identical to a computed one. `APEX_PRECOMPUTE_SECONDS` sets the build-time budget (default 300).
+- **Results survive restarts (optional).** Run `supabase/cache.sql` once and set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the API host; finished results are then also kept in the `api_cache` table. Keys include a fingerprint of the code and data snapshot, so a new deploy never serves an old answer. Live, delayed and rehearsal data is never stored.
+- **Exact plan search.** Pit plans are solved by an exact dynamic-programming search over the same cost model as the OR-Tools CP-SAT formulation; the tests check that both return the same optimum.
+
 ### Configuration (environment variables)
 
 | Variable | Default | Purpose |

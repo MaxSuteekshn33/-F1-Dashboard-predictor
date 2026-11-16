@@ -4,7 +4,7 @@ import asyncio, os, threading, time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Body, Header
 from fastapi.middleware.cors import CORSMiddleware
-from . import db, live, racestate as rs, service as sv, weather, retrain, ingest, bootstrap, nextrace, clock, stream
+from . import db, live, racestate as rs, service as sv, weather, retrain, ingest, bootstrap, nextrace, clock, stream, store
 from .config import CORS_ORIGINS
 
 
@@ -20,6 +20,9 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(live.loop()))
     if os.getenv("APEX_WARM", "1") == "1" and not bootstrap.needed():
         tasks.append(asyncio.create_task(asyncio.to_thread(_warm)))
+    tasks.append(asyncio.create_task(asyncio.to_thread(store.remote_prune)))
+    if os.getenv("RENDER_EXTERNAL_URL") and os.getenv("APEX_KEEP_AWAKE", "1") == "1":
+        tasks.append(asyncio.create_task(_keep_awake(os.environ["RENDER_EXTERNAL_URL"])))
     if os.getenv("APEX_AUTO_RETRAIN", "0") == "1":
         tasks.append(asyncio.create_task(asyncio.to_thread(retrain.run)))
     yield
@@ -28,6 +31,22 @@ async def lifespan(app: FastAPI):
 
 
 _last_request = {"t": 0.0}
+_awake = {"pings": 0, "last": None, "last_error": None}
+
+
+async def _keep_awake(url: str) -> None:
+    """Free hosts put an idle server to sleep, which costs the next visitor most of a minute and every result
+    held in memory. A request to our own public address every nine minutes counts as traffic and prevents it.
+    Switch off with APEX_KEEP_AWAKE=0."""
+    import requests
+    while True:
+        await asyncio.sleep(9 * 60)
+        try:
+            r = await asyncio.to_thread(requests.get, url.rstrip("/") + "/api/health", timeout=20)
+            _awake.update(pings=_awake["pings"] + 1, last=time.time(), last_error=None if r.ok else f"HTTP {r.status_code}")
+        except Exception as e:
+            _awake["last_error"] = f"{type(e).__name__}: {e}"
+
 
 
 def _warm() -> None:
@@ -60,15 +79,24 @@ app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*
 _slots = threading.BoundedSemaphore(int(os.getenv("APEX_MAX_CONCURRENCY", "2")))
 
 
-def guard(fn, *a, light: bool = False, **k):
+def guard(fn, *a, light: bool = False, persist: str | None = None, **k):
     """Run a service call. Heavy calls (models, simulations) take a slot so memory stays bounded; `light` calls
-    (timing, lap tables, status) skip the queue, so the timing screen stays current while predictions catch up."""
+    (timing, lap tables, status) skip the queue, so the timing screen stays current while predictions catch up.
+    `persist` names a result that cannot change once computed (a finished race at a lap): it is read from and
+    written to the durable store, so it survives restarts. The first two arguments must be (session_key, lap)."""
     _last_request["t"] = time.time()
     try:
+        pkey = store.state_key(persist, a[0], a[1], a[2:], k) if persist else None
+        hit = store.get(pkey)
+        if hit is not None:
+            return hit
         if light:
-            return sv.clean(fn(*a, **k))
-        with _slots:
-            return sv.clean(fn(*a, **k))
+            out = sv.clean(fn(*a, **k))
+        else:
+            with _slots:
+                out = sv.clean(fn(*a, **k))
+        store.put(pkey, persist or "", out)
+        return out
     except KeyError as e:
         raise HTTPException(404, str(e))
     except HTTPException:
@@ -98,7 +126,7 @@ def default_key() -> int:
 def health():
     """Liveness probe for hosting platforms; also reports first-time setup progress."""
     from .config import SEEDED
-    return {"ok": True, "bootstrap": bootstrap.state, "started_from_snapshot": SEEDED}
+    return {"ok": True, "bootstrap": bootstrap.state, "started_from_snapshot": SEEDED, "result_store": store.status(), "keep_awake": _awake}
 
 
 @app.get("/api/status")
@@ -150,7 +178,7 @@ def tel_cars(session_key: int | None = None):
 
 @app.get("/api/telemetry/pace")
 def tel_pace(session_key: int | None = None, lap: int | None = None):
-    return guard(sv.pace_comparison, session_key or default_key(), lap)
+    return guard(sv.pace_comparison, session_key or default_key(), lap, persist="pace")
 
 
 @app.get("/api/predict/prerace")
@@ -160,12 +188,12 @@ def predict_prerace(race_id: int | None = None):
 
 @app.get("/api/predict/inrace")
 def predict_inrace(session_key: int | None = None, lap: int | None = None):
-    return guard(sv.inrace_prediction, session_key or default_key(), lap)
+    return guard(sv.inrace_prediction, session_key or default_key(), lap, persist="inrace")
 
 
 @app.get("/api/strategy")
 def strategy(session_key: int | None = None, lap: int | None = None, driver: int | None = None, parts: str = "overview,plans"):
-    return guard(sv.strategy_view, session_key or default_key(), lap, driver, parts)
+    return guard(sv.strategy_view, session_key or default_key(), lap, driver, parts, persist="strategy")
 
 
 @sv.state_cached("weather", ttl=300)
@@ -206,13 +234,15 @@ def _lab_cached(session_key, lap=None, body=None):
 
 @app.post("/api/safetycar")
 def safetycar(body: dict = Body(...)):
-    return guard(_safetycar_cached, body.get("session_key") or default_key(), body.get("lap"), body.get("driver"), body)
+    return guard(_safetycar_cached, body.get("session_key") or default_key(), body.get("lap"), body.get("driver"), body, persist="safetycar")
 
 
 @app.post("/api/sim/run")
 def sim_run(body: dict = Body(...)):
     # identical scenario sets are served from the cache; the simulation itself is unchanged (fixed seed, same run count)
-    return guard(_lab_cached, body.get("session_key") or default_key(), None, body)
+    laps = {x.get("lap") for x in body.get("scenarios", [])}
+    return guard(_lab_cached, body.get("session_key") or default_key(), next(iter(laps)) if len(laps) == 1 else None, body,
+                 persist="lab" if len(laps) == 1 else None)
 
 
 @app.get("/api/live")
@@ -309,7 +339,7 @@ def h_driver(driver_id: str):
 
 @app.get("/api/history/similar")
 def h_similar(session_key: int | None = None, lap: int | None = None):
-    return guard(sv.similar, session_key or default_key(), lap)
+    return guard(sv.similar, session_key or default_key(), lap, persist="similar")
 
 
 @app.get("/api/analytics")
@@ -319,7 +349,8 @@ def analytics(year: int | None = None):
 
 @app.get("/api/advisor")
 def advisor(session_key: int | None = None, lap: int | None = None, driver: int | None = None, parts: str = "weather,strategy,explain"):
-    return guard(sv.advisor, session_key or default_key(), lap, driver, parts)
+    # the weather part reads an external forecast that can be unavailable at times, so only the other parts are stored
+    return guard(sv.advisor, session_key or default_key(), lap, driver, parts, persist=None if "weather" in parts else "advisor")
 
 
 @app.get("/api/health/sources")
@@ -334,7 +365,9 @@ def models():
 
 @app.post("/api/admin/retrain")
 async def admin_retrain(force: bool = False):
-    return sv.clean(await asyncio.to_thread(retrain.run, force))
+    out = sv.clean(await asyncio.to_thread(retrain.run, force))
+    store.bump()        # models may have changed: results stored before now are no longer used
+    return out
 
 
 @app.websocket("/ws/live")

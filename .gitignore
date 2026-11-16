@@ -9,3 +9,4 @@ frontend/next-env.d.ts
 *.tsbuildinfo
 .env
 backend/catboost_info/
+backend/precomputed.db

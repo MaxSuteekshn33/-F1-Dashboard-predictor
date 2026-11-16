@@ -23,3 +23,5 @@ services:
         value: "1"
       # Optional paid OpenF1 account for real-time data: add OPENF1_USERNAME and OPENF1_PASSWORD
       # in the service's Environment tab after it is created.
+      # Optional: keep finished results across restarts. Run supabase/cache.sql, then add SUPABASE_URL and
+      # SUPABASE_SERVICE_ROLE_KEY in the Environment tab (server only — never in Vercel or the browser).

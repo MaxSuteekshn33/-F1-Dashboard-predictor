@@ -6,6 +6,7 @@ same circuit (a *historical estimate*) or, failing that, towards generic default
 Each output says which of those it is.
 """
 from __future__ import annotations
+import itertools
 import numpy as np
 import pandas as pd
 from ortools.sat.python import cp_model
@@ -297,6 +298,100 @@ def optimise(m: dict, cur_lap: int, total_laps: int, comp: str | None, age: int,
             "pit_time_lost": stops * pit_loss, "deg_time": deg, "rule_ok": rule_ok}
 
 
+def exact(m: dict, cur_lap: int, total_laps: int, comp: str | None, age: int, used: list[str], stops: int,
+          pit_loss: float | None = None, forbid: list | None = None, allowed=SLICKS, min_stint: int = 4) -> dict | None:
+    """The same problem as `optimise` — exactly `stops` stops, same cost tables, same rules — solved exactly by
+    dynamic programming over stint lengths for every compound sequence. It returns the same optimum as CP-SAT
+    (checked in the tests) in a few milliseconds, so it is what requests use; CP-SAT stays as the reference."""
+    R = total_laps - cur_lap
+    if R < 1:
+        return None
+    pit_loss = m["pit_loss"] if pit_loss is None else pit_loss
+    cur = comp if comp in SLICKS else None
+    if stops and R < stops * min_stint + (1 if cur else 0):
+        return None
+    if not cur and stops == 0:
+        return None
+    first = stint_cost(m, cur, age, R, total_laps) if cur else None
+    fresh = [stint_cost(m, c, 0, R, total_laps) + WARMUP[c] for c in allowed]
+    used_dry = set(u for u in used if u in SLICKS)
+    rule_ok, only_i = True, None
+    if not any(u in WETS for u in used) and len(used_dry) < 2:
+        only = next(iter(used_dry), cur)
+        if stops == 0:
+            rule_ok = False
+        elif only in allowed:
+            only_i = allowed.index(only)
+    ms = min(min_stint, R)
+    INF = 1e15
+    lens_idx = np.arange(R + 1)
+    tails: dict = {}
+
+    def tail(seq: tuple):
+        """best[r], first_len[r]: cheapest way to cover r laps with fresh stints on the compounds in `seq`."""
+        if seq in tails:
+            return tails[seq]
+        f = np.concatenate([[INF], fresh[seq[0]]])            # f[l] = cost of a fresh stint of l laps
+        f[:ms] = INF
+        if len(seq) == 1:
+            out = (f.copy(), lens_idx.copy())
+        else:
+            nb, _ = tail(seq[1:])
+            # cost[r, l] = f[l] + nb[r - l]
+            rl = lens_idx[:, None] - lens_idx[None, :]
+            cost = np.where(rl >= 0, f[None, :] + nb[np.clip(rl, 0, R)], INF)
+            arg = cost.argmin(axis=1)
+            out = (cost[lens_idx, arg], arg)
+        tails[seq] = out
+        return out
+
+    best = None                                               # (cost, l0, seq)
+    if stops == 0:
+        best = (float(first[R - 1]), R, ())
+    else:
+        fb = tuple(allowed.index(c) for c in forbid) if forbid else None
+        for seq in itertools.product(range(len(allowed)), repeat=stops):
+            if only_i is not None and all(c == only_i for c in seq):
+                continue
+            if fb is not None and seq == fb:
+                continue
+            tb, _ = tail(seq)
+            if cur:
+                l0 = np.arange(1, R + 1)
+                cost = first[l0 - 1] + tb[R - l0]
+                i = int(cost.argmin())
+                cand = (float(cost[i]), int(l0[i]), seq)
+            else:
+                cand = (float(tb[R]), 0, seq)
+            if cand[0] < INF / 2 and (best is None or cand[0] < best[0] - 1e-9):
+                best = cand
+    if best is None:
+        return None
+    tyre_time, l0, seq = best
+    lens, rem = [l0], R - l0
+    for i in range(len(seq)):
+        ln = int(tail(seq[i:])[1][rem])
+        lens.append(ln); rem -= ln
+    comps = [allowed[c] for c in seq]
+    lap, plan, stints = cur_lap, [], []
+    names = ([cur] if cur else [comp]) + comps
+    for i, ln in enumerate(lens):
+        if ln == 0:
+            plan.append({"lap": lap, "compound": comps[i]})
+            continue
+        stints.append({"compound": names[i], "from_lap": lap + 1, "to_lap": lap + ln, "laps": ln, "start_age": age if i == 0 else 0})
+        lap += ln
+        if i < stops:
+            plan.append({"lap": lap, "compound": comps[i]})
+    deg = 0.0
+    for s_ in stints:
+        if s_["compound"] in SLICKS:
+            c = m["compounds"][s_["compound"]]
+            deg += float(c["deg"] * (s_["start_age"] * s_["laps"] + s_["laps"] * (s_["laps"] - 1) / 2))
+    return {"stops": stops, "plan": plan, "stints": stints, "rel_time": tyre_time + stops * pit_loss,
+            "pit_time_lost": stops * pit_loss, "deg_time": deg, "rule_ok": rule_ok}
+
+
 def fast_plan(m: dict, cur_lap: int, total_laps: int, comp: str | None, age: int, used: list[str],
               pit_loss: float | None = None, allowed=SLICKS, min_stint: int = 4, max_stops: int = 3) -> dict | None:
     """Exact search over the same cost model as `optimise` (stop laps × compounds, same rules), vectorised with
@@ -420,18 +515,18 @@ def strategies(m: dict, cur_lap: int, total_laps: int, comp: str | None, age: in
 def _strategies(m, cur_lap, total_laps, comp, age, used):
     out = []
     for label, k in (("A", 1), ("B", 2), ("C", 3)):
-        p = optimise(m, cur_lap, total_laps, comp, age or 0, used, k)
+        p = exact(m, cur_lap, total_laps, comp, age or 0, used, k)
         if p:
             p["label"] = label; p["name"] = f"{k}-stop" + ("" if k == 1 else "")
             out.append(p)
-    p0 = optimise(m, cur_lap, total_laps, comp, age or 0, used, 0)
+    p0 = exact(m, cur_lap, total_laps, comp, age or 0, used, 0)
     if p0 and p0["rule_ok"]:
         p0["label"] = "0"; p0["name"] = "No further stop"; out.append(p0)
     legal = [p for p in out if p["rule_ok"]]
     if legal:
         best = min(legal, key=lambda p: p["rel_time"])
         if best["plan"]:
-            alt = optimise(m, cur_lap, total_laps, comp, age or 0, used, best["stops"], forbid=[x["compound"] for x in best["plan"]])
+            alt = exact(m, cur_lap, total_laps, comp, age or 0, used, best["stops"], forbid=[x["compound"] for x in best["plan"]])
             if alt:
                 alt["label"] = "D"; alt["name"] = f"Alternative compounds ({best['stops']}-stop)"; out.append(alt)
         ref = best["rel_time"]

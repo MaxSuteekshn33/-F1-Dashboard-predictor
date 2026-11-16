@@ -102,3 +102,24 @@ def test_stream_handler_buffers_counts_and_tracks_cars():
     stream.state.update(connected=True, last_message=time.time()); assert stream.healthy()
     stream.state.update(last_message=time.time() - 300); assert not stream.healthy()
     stream.state.update(connected=False, last_message=None)
+
+
+def test_exact_search_matches_cp_sat_for_every_stop_count():
+    """Requests use the exact dynamic-programming search; CP-SAT is the reference it must agree with."""
+    m = model()
+    cases = [("MEDIUM", 10, ["MEDIUM"]), ("SOFT", 3, ["SOFT"]), ("HARD", 20, ["MEDIUM", "HARD"]), (None, 0, ["INTERMEDIATE"]), ("SOFT", 0, ["SOFT"])]
+    for comp, age, used in cases:
+        for cur, total in ((12, 58), (0, 50), (40, 57)):
+            for k in (0, 1, 2, 3):
+                a, b = sg.optimise(m, cur, total, comp, age, used, k), sg.exact(m, cur, total, comp, age, used, k)
+                assert (a is None) == (b is None), (comp, age, used, cur, total, k)
+                if a:
+                    assert abs(a["rel_time"] - b["rel_time"]) < 0.01, (comp, cur, total, k, a["rel_time"], b["rel_time"])
+                    assert a["rule_ok"] == b["rule_ok"] and len(b["plan"]) == k
+                    assert sum(s["laps"] for s in b["stints"]) == total - cur
+                    if k:
+                        fa, fb = (f(m, cur, total, comp, age, used, k, forbid=[x["compound"] for x in a["plan"]]) for f in (sg.optimise, sg.exact))
+                        assert (fa is None) == (fb is None)
+                        if fa:
+                            assert abs(fa["rel_time"] - fb["rel_time"]) < 0.01
+                            assert [x["compound"] for x in fb["plan"]] != [x["compound"] for x in a["plan"]]

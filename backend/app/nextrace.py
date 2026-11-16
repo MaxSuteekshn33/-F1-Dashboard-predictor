@@ -9,7 +9,7 @@ import json
 import time
 import numpy as np
 import pandas as pd
-from . import db, racestate as rs, strategy as sg, sim, weather, service as sv
+from . import db, racestate as rs, strategy as sg, sim, weather, service as sv, store
 from .cache import cached
 
 
@@ -174,12 +174,26 @@ _plan_cache: dict = {}
 _result_cache: dict = {}
 
 
+def _fingerprint() -> list:
+    """Everything outside the request that a pre-race simulation depends on: the race, the starting order, the
+    model, and the forecast rain. If any of it changes, stored results are not reused."""
+    pred = sv.prerace_prediction()
+    fc = weather.next_race_forecast()
+    rows = fc.get("rows") if fc.get("available") else None
+    return [pred.get("race", {}).get("race_id"), pred.get("variant"), pred.get("model_version"),
+            [(d["driver_id"], d.get("grid"), d.get("pred_pos")) for d in pred.get("drivers", [])], rows]
+
+
 def simulate(body: dict) -> dict:
     key = json.dumps(body, sort_keys=True, default=str)
     hit = _result_cache.get(key)
     if hit and hit[0] > time.time():
         return hit[1]
-    out = _simulate(body)
+    skey = store.plain_key("next_simulate", key, _fingerprint())
+    out = store.get(skey)
+    if out is None:
+        out = sv.clean(_simulate(body))
+        store.put(skey, "next_simulate", out)
     if len(_result_cache) > 40:
         _result_cache.clear()
     _result_cache[key] = (time.time() + 600, out)
@@ -214,7 +228,7 @@ def _simulate(body: dict) -> dict:
                      f"{ctx['hz']['dnf_per_race'] * 100:.0f}%/car ({ctx['hz']['source']}).")
     if body.get("track_temp_delta"):
         scn["track_temp_delta"] = float(body["track_temp_delta"]); notes.append(f"ASSUMPTION · track {float(body['track_temp_delta']):+.0f}°C → tyre wear {float(body['track_temp_delta']) * 2:+.0f}%.")
-    # candidate plans: best one- and two-stop for each starting compound (CP-SAT). They depend only on the
+    # candidate plans: best one- and two-stop for each starting compound (exact search). They depend only on the
     # circuit's tyre model, so they are solved once per race and reused for every driver and what-if.
     pkey = (ctx["race"]["race_id"], total, round(m["pit_loss"], 2), tuple(round(m["compounds"][c]["deg"], 4) for c in sg.SLICKS))
     if pkey not in _plan_cache:
@@ -222,7 +236,7 @@ def _simulate(body: dict) -> dict:
         found = []
         for c0 in sg.SLICKS:
             for k in (1, 2):
-                p = sg.optimise(m, 0, total, c0, 0, [c0], k)
+                p = sg.exact(m, 0, total, c0, 0, [c0], k)
                 if p and p["rule_ok"]:
                     seq = "-".join([c0[0]] + [x["compound"][0] for x in p["plan"]])
                     found.append({"label": f"{seq} · {k}-stop", "start": c0, "stops": k, "plan": [(x["lap"], x["compound"]) for x in p["plan"]], "model_time": p["rel_time"]})
