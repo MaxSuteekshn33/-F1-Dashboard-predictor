@@ -141,8 +141,11 @@ def default_plans(ctx: dict) -> dict:
 _plans: dict = {}
 
 
-def run(ctx: dict, plans: dict | None = None, scenario: dict | None = None, n: int = MC_SIMS, seed: int = 1,
-        focus: int | None = None) -> dict:
+def package(ctx: dict, plans: dict | None = None, scenario: dict | None = None, n: int = MC_SIMS, seed: int = 1,
+            focus: int | None = None) -> dict:
+    """Everything one simulation needs, as plain numbers and lists — no randomness yet. The server's engine
+    (`run_package`) and the browser's engine (frontend/lib/sim.ts) both start from this, so they cannot disagree
+    about inputs; they differ only in the random numbers they draw."""
     sc = scenario or {}
     st, m, hz = ctx["st"], ctx["m"], ctx["hz"]
     rows = [r for r in st["rows"] if r["status"] == "RUNNING" and r["gap_s"] is not None]
@@ -151,81 +154,124 @@ def run(ctx: dict, plans: dict | None = None, scenario: dict | None = None, n: i
     total = st["total_laps"] or st["max_lap"]
     R = total - cur
     if D == 0 or R <= 0:
-        return {"error": "Race is not in progress at this lap — nothing left to simulate.", "drivers": []}
-    rng = np.random.default_rng(seed)
+        return {"error": "Race is not in progress at this lap — nothing left to simulate."}
     plans = dict(default_plans(ctx) if plans is None else plans)
     nums = [r["driver_number"] for r in rows]
     base = np.array([m["base"].get(d, m["field_base"] + 0.6) for d in nums])
     # A per-driver pace fitted on a handful of laps is noisy (and leaders manage their pace). Shrink each car's
     # pace towards the median of the cars running around it — race order already carries pace information —
     # with a weight that grows with the number of clean laps behind the estimate.
-    nfit0 = m.get("n_by_driver", {})
+    nfit = m.get("n_by_driver", {})
     local = np.array([np.median(base[max(0, i - 3):i + 4]) for i in range(D)])
-    wgt = np.array([nfit0.get(d, 0) / (nfit0.get(d, 0) + 12.0) for d in nums])
+    wgt = np.array([nfit.get(d, 0) / (nfit.get(d, 0) + 12.0) for d in nums])
     base = wgt * base + (1 - wgt) * local
-    sigma = np.array([m["sigma"].get(d, m["sigma_all"]) for d in nums])
+    sigma = np.array([m["sigma"].get(d, m["sigma_all"]) for d in nums]) * float(sc.get("variability", 1.0))
     off = np.array([m["compounds"][c]["offset"] if c in sg.SLICKS else 0.0 for c in sg.COMPOUNDS])
     deg = np.array([m["compounds"][c]["deg"] if c in sg.SLICKS else 0.03 for c in sg.COMPOUNDS]) * (1 + 0.02 * sc.get("track_temp_delta", 0.0))
     life = np.array([sg.LIFE_FRAC.get(c, 0.6) * total for c in sg.COMPOUNDS])
     warm = np.array([sg.WARMUP[c] for c in sg.COMPOUNDS])
     pit_loss = float(sc.get("pit_loss") or m["pit_loss"]) + float(sc.get("pit_stop_extra", 0.0))
-    comp0 = np.array([CI.get(r["compound"] or "MEDIUM", 1) for r in rows])
-    age0 = np.array([r["tyre_age"] or 0 for r in rows], float)
-    cum = np.tile(np.array([r["gap_s"] for r in rows], float), (n, 1))
-    comp = np.tile(comp0, (n, 1)); age = np.tile(age0, (n, 1))
-    alive = np.ones((n, D), bool)
+    comp0 = [CI.get(r["compound"] or "MEDIUM", 1) for r in rows]
+    age0 = [float(r["tyre_age"] or 0) for r in rows]
+    cum0 = [float(r["gap_s"]) for r in rows]
     overrides = sc.get("overrides", {})          # {driver_number: {position, compound, tyre_age}}
     for i, d in enumerate(nums):
         o = overrides.get(d) or overrides.get(str(d))
         if o:
-            if o.get("compound") in CI: comp[:, i] = CI[o["compound"]]
-            if o.get("tyre_age") is not None: age[:, i] = float(o["tyre_age"])
-            if o.get("gap_s") is not None: cum[:, i] = float(o["gap_s"])
-    # plan arrays [D, K]
+            if o.get("compound") in CI: comp0[i] = CI[o["compound"]]
+            if o.get("tyre_age") is not None: age0[i] = float(o["tyre_age"])
+            if o.get("gap_s") is not None: cum0[i] = float(o["gap_s"])
     K = max([len(p) for p in plans.values()] + [1])
-    plan_lap = np.full((D, K), 10 ** 6); plan_comp = np.zeros((D, K), int)
+    plan_lap = [[10 ** 6] * K for _ in range(D)]; plan_comp = [[0] * K for _ in range(D)]
     for i, d in enumerate(nums):
         for j, (pl, pc) in enumerate(sorted(plans.get(d, []))):
-            plan_lap[i, j] = pl; plan_comp[i, j] = CI[pc]
-    ptr = np.zeros((n, D), int)
+            plan_lap[i][j] = int(pl); plan_comp[i][j] = CI[pc]
     # manual drivers follow their forced plan; automatic weather/SC reactions resume once it is used up
     mset = set(int(x) for x in sc.get("manual", []))
     never = set(int(x) for x in sc.get("no_reaction", []))      # these drivers never react to weather/SC on their own
-    manual_until = np.array([10 ** 6 if d in never else (len(plans.get(d, [])) if d in mset else 0) for d in nums])
     hold = {int(k): int(v) for k, v in (sc.get("hold") or {}).items()}   # {driver: lap} no automatic reaction up to that lap
-    hold_until = np.array([hold.get(d, 0) for d in nums])
-    # uncertainty about each car's true pace (larger when few clean laps were available to fit it)
-    nfit = m.get("n_by_driver", {})
-    base_sd = np.array([0.2 if nfit.get(d, 0) >= 8 else 0.35 for d in nums]) * float(sc.get("pace_uncertainty", 1.0))
-    base = base + rng.normal(0, 1, (n, D)) * base_sd[None, :]
-    sigma = sigma * float(sc.get("variability", 1.0))
     # wetness timeline
     w0 = float(sc["wetness"]) if sc.get("wetness") is not None else ctx["wet"]["wetness"]
     wx = st["weather"] or {}
     rain = list(sc.get("rain") or [])
     rain = (rain + [rain[-1] if rain else (0.3 if (wx.get("rainfall") and sc.get("rain") is None) else 0.0)] * R)[:R]
     wpath = wetness_path(w0, rain, (wx.get("track_temperature") or 25) + sc.get("track_temp_delta", 0.0), wx.get("wind_speed"))
-    jitter = rng.integers(-int(sc.get("rain_uncertainty_laps", 0)), int(sc.get("rain_uncertainty_laps", 0)) + 1, size=n) if sc.get("rain_uncertainty_laps") else np.zeros(n, int)
+    forced = sc.get("safety_car")
+    forced_spec = None
+    if forced:
+        kind = forced.get("type", "SC")
+        forced_spec = {"start": max(0, int(forced["lap"]) - cur - 1), "duration": int(forced.get("duration", 4 if kind == "SC" else 2)),
+                       "code": 2 if kind == "SC" else 1}
+    random_on = bool(sc.get("random_incidents", True))
+    retire = {int(k): int(v) for k, v in (sc.get("retirements") or {}).items()}   # {driver_number: lap}
+    thresh = float(sc.get("overtake_delta", 0.7))    # ASSUMPTION: pace advantage needed to pass (s/lap)
+    return {
+        "n": int(n), "seed": int(seed), "cur": cur, "total": int(total), "R": int(R), "D": D, "K": K,
+        "nums": nums, "codes": [r["code"] for r in rows], "colours": [r["team_colour"] for r in rows],
+        "base": base.tolist(), "sigma": sigma.tolist(),
+        # uncertainty about each car's true pace (larger when few clean laps were available to fit it)
+        "base_sd": [(0.2 if nfit.get(d, 0) >= 8 else 0.35) * float(sc.get("pace_uncertainty", 1.0)) for d in nums],
+        "off": off.tolist(), "deg": deg.tolist(), "life": life.tolist(), "warm": warm.tolist(), "pit_loss": pit_loss,
+        "comp0": comp0, "age0": age0, "cum0": cum0, "plan_lap": plan_lap, "plan_comp": plan_comp,
+        "manual_until": [10 ** 6 if d in never else (len(plans.get(d, [])) if d in mset else 0) for d in nums],
+        "hold_until": [hold.get(d, 0) for d in nums],
+        "wpath": [float(x) for x in wpath], "rain_uncertainty_laps": int(sc.get("rain_uncertainty_laps", 0) or 0),
+        "forced": forced_spec, "random_incidents": random_on,
+        "sc_per_lap": float(hz["sc_per_lap"]), "vsc_per_lap": float(hz["vsc_per_lap"]),
+        "hazard": (hz["dnf_per_race"] / max(total, 1)) if random_on else 0.0,
+        "retire_lap": [retire.get(d, 0) for d in nums], "thresh": thresh,
+        "pit_closed": sorted(int(x) for x in sc.get("pit_closed_laps", [])),
+        "best_slick": int(np.argmin(off[:3] + deg[:3] * 8)),
+        "focus": nums.index(focus) if (focus is not None and focus in nums) else None,
+        "constants": {"cliff": sg.CLIFF, "cliff_max": sg.CLIFF_MAX, "pit_factor_sc": sg.SC_PIT_FACTOR["SC"], "pit_factor_vsc": sg.SC_PIT_FACTOR["VSC"],
+                      "slick_to_inter": W_SLICK_TO_INTER, "inter_to_slick": W_INTER_TO_SLICK, "inter_to_wet": W_INTER_TO_WET},
+        "inputs": {"pit_loss_s": round(pit_loss, 2), "pit_loss_source": m["pit_loss_source"], "overtake_delta_s": thresh,
+                   "sc_per_lap": round(hz["sc_per_lap"], 4), "vsc_per_lap": round(hz["vsc_per_lap"], 4), "hazard_source": hz["source"],
+                   "dnf_per_race": hz["dnf_per_race"], "start_wetness": w0, "random_incidents": random_on and not forced},
+    }
+
+
+def run(ctx: dict, plans: dict | None = None, scenario: dict | None = None, n: int = MC_SIMS, seed: int = 1,
+        focus: int | None = None) -> dict:
+    return run_package(package(ctx, plans, scenario, n, seed, focus))
+
+
+def run_package(pk: dict) -> dict:
+    if pk.get("error"):
+        return {"error": pk["error"], "drivers": []}
+    n, D, K, R, cur, total = pk["n"], pk["D"], pk["K"], pk["R"], pk["cur"], pk["total"]
+    rng = np.random.default_rng(pk["seed"])
+    nums = pk["nums"]
+    base, sigma = np.array(pk["base"]), np.array(pk["sigma"])
+    off, deg, life, warm = (np.array(pk[k]) for k in ("off", "deg", "life", "warm"))
+    pit_loss = pk["pit_loss"]
+    cum = np.tile(np.array(pk["cum0"], float), (n, 1))
+    comp = np.tile(np.array(pk["comp0"]), (n, 1)); age = np.tile(np.array(pk["age0"], float), (n, 1))
+    alive = np.ones((n, D), bool)
+    plan_lap = np.array(pk["plan_lap"]); plan_comp = np.array(pk["plan_comp"])
+    ptr = np.zeros((n, D), int)
+    manual_until = np.array(pk["manual_until"]); hold_until = np.array(pk["hold_until"])
+    base = base + rng.normal(0, 1, (n, D)) * np.array(pk["base_sd"])[None, :]
+    wpath = np.array(pk["wpath"])
+    u = pk["rain_uncertainty_laps"]
+    jitter = rng.integers(-u, u + 1, size=n) if u else np.zeros(n, int)
     # neutralisations: forced by the scenario, otherwise drawn from historical base rates
     neut = np.zeros((n, R), int)   # 0 green, 1 VSC, 2 SC
-    forced = sc.get("safety_car")
+    forced = pk["forced"]
     if forced:
-        a = max(0, int(forced["lap"]) - cur - 1)
-        dur = int(forced.get("duration", 4 if forced.get("type", "SC") == "SC" else 2))
-        neut[:, a:a + dur] = 2 if forced.get("type", "SC") == "SC" else 1
-    elif sc.get("random_incidents", True):
-        for kind, rate, code, lo, hi in (("SC", hz["sc_per_lap"], 2, 3, 6), ("VSC", hz["vsc_per_lap"], 1, 1, 3)):
+        neut[:, forced["start"]:forced["start"] + forced["duration"]] = forced["code"]
+    elif pk["random_incidents"]:
+        for kind, rate, code, lo, hi in (("SC", pk["sc_per_lap"], 2, 3, 6), ("VSC", pk["vsc_per_lap"], 1, 1, 3)):
             starts = rng.random((n, R)) < rate
             for s_i, l_i in zip(*np.nonzero(starts)):
                 e = l_i + int(rng.integers(lo, hi))
                 neut[s_i, l_i:e] = np.maximum(neut[s_i, l_i:e], code)
-    hazard = (hz["dnf_per_race"] / max(total, 1)) if sc.get("random_incidents", True) else 0.0
-    retire = {int(k): int(v) for k, v in (sc.get("retirements") or {}).items()}   # {driver_number: lap}
-    thresh = float(sc.get("overtake_delta", 0.7))    # ASSUMPTION: pace advantage needed to pass (s/lap)
+    hazard = pk["hazard"]
+    retire_lap = pk["retire_lap"]
+    thresh = pk["thresh"]
     stops = np.zeros((n, D), int); blocked_laps = np.zeros((n, D))
-    pit_closed = set(int(x) for x in sc.get("pit_closed_laps", []))
-    best_slick = int(np.argmin(off[:3] + deg[:3] * 8))
-    idx_all = np.arange(n)[:, None]
+    pit_closed = set(pk["pit_closed"])
+    best_slick = pk["best_slick"]
     for li in range(R):
         lap = cur + li + 1
         nt = neut[:, li][:, None]
@@ -262,7 +308,10 @@ def run(ctx: dict, plans: dict | None = None, scenario: dict | None = None, n: i
         late = has_plan & (cur_plan_lap == lap) & ~planned
         if late.any():
             plan_lap = np.broadcast_to(plan_lap, (n, D, K)).copy() if plan_lap.ndim == 2 else plan_lap
-            np.put_along_axis(plan_lap, np.clip(ptr, 0, K - 1)[..., None], np.where(late, lap + 1, cur_plan_lap)[..., None], 2)
+            # only the postponed entries are rewritten (their pointer has not moved); every other car keeps its plan
+            slot = np.clip(ptr, 0, K - 1)[..., None]
+            kept = np.take_along_axis(plan_lap, slot, 2)[..., 0]
+            np.put_along_axis(plan_lap, slot, np.where(late, lap + 1, kept)[..., None], 2)
         # weather-forced stops consume the next planned stop if it was imminent
         ptr = ptr + ((to_inter | to_wet | to_slick) & has_plan & ~planned & ~early & (cur_plan_lap - lap <= 6))
         stops += pit
@@ -271,7 +320,7 @@ def run(ctx: dict, plans: dict | None = None, scenario: dict | None = None, n: i
         # retirements
         dead_now = alive & (rng.random((n, D)) < hazard)
         for i, d in enumerate(nums):
-            if retire.get(d) == lap:
+            if retire_lap[i] == lap:
                 dead_now[:, i] = alive[:, i]
         alive &= ~dead_now
         cum = np.where(dead_now, 1e6 - lap * 1e3, cum)
@@ -303,10 +352,10 @@ def run(ctx: dict, plans: dict | None = None, scenario: dict | None = None, n: i
     pos = np.argsort(np.argsort(cum, axis=1), axis=1) + 1
     lead_time = cum.min(axis=1, keepdims=True)
     res = []
-    for i, r in enumerate(rows):
+    for i in range(D):
         p = pos[:, i]
         t = cum[:, i][alive[:, i]]
-        res.append({"driver_number": r["driver_number"], "code": r["code"], "team_colour": r["team_colour"],
+        res.append({"driver_number": nums[i], "code": pk["codes"][i], "team_colour": pk["colours"][i],
                     "p_win": float((p == 1).mean()), "p_podium": float((p <= 3).mean()), "p_top5": float((p <= 5).mean()),
                     "exp_pos": float(p.mean()), "pos_p10": int(np.percentile(p, 10)), "pos_p90": int(np.percentile(p, 90)),
                     "p_dnf": float((~alive[:, i]).mean()), "mean_stops": float(stops[:, i].mean()),
@@ -315,12 +364,9 @@ def run(ctx: dict, plans: dict | None = None, scenario: dict | None = None, n: i
                     "blocked_laps": float(blocked_laps[:, i].mean()),
                     "exp_gap_to_winner": float((cum[:, i] - lead_time[:, 0])[alive[:, i]].mean()) if len(t) else None})
     out = {"n_sims": n, "from_lap": cur, "total_laps": total, "drivers": res,
-           "wetness_path": [round(float(x), 3) for x in wpath],
-           "inputs": {"pit_loss_s": round(pit_loss, 2), "pit_loss_source": m["pit_loss_source"], "overtake_delta_s": thresh,
-                      "sc_per_lap": round(hz["sc_per_lap"], 4), "vsc_per_lap": round(hz["vsc_per_lap"], 4), "hazard_source": hz["source"],
-                      "dnf_per_race": hz["dnf_per_race"], "start_wetness": w0, "random_incidents": bool(sc.get("random_incidents", True)) and not forced}}
-    if focus is not None and focus in nums:
-        i = nums.index(focus)
+           "wetness_path": [round(float(x), 3) for x in wpath], "inputs": pk["inputs"]}
+    if pk["focus"] is not None:
+        i = pk["focus"]
         p = pos[:, i]
         se = lambda x: float(np.sqrt(max(x * (1 - x), 1e-9) / n))
         out["focus"] = dict(res[i], pos_hist=[float((p == k).mean()) for k in range(1, D + 1)],

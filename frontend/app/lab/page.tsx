@@ -36,7 +36,25 @@ export default function Lab() {
     track_temp_delta: s.track_temp_delta || undefined, pit_duration_delta: s.pit_duration_delta || undefined,
     overrides: s.ov_position || s.ov_compound || s.ov_age !== undefined ? { position: s.ov_position, compound: s.ov_compound, tyre_age: s.ov_age } : undefined,
     rival: s.rival && s.rival_mode !== "none" ? (s.rival_mode === "stay" ? { driver: s.rival, stay_out: true } : { driver: s.rival, pit_laps: [{ lap: s.rival_lap ?? lap + 1, compound: s.rival_compound }] }) : undefined })) });
-  const run = () => { setBusy(true); setErr(null); api("/api/sim/run", body()).then(setRes).catch((e) => setErr(String(e.message))).finally(() => setBusy(false)); };
+  // The server prepares the inputs (quick); the simulations run in this browser, off the main thread — same
+  // engine and run count as the server's. If that is not possible the server runs them instead.
+  const inBrowser = (prep: any) => new Promise<any>((resolve, reject) => {
+    const w = new Worker(new URL("../../lib/sim.worker.ts", import.meta.url));
+    const stop = setTimeout(() => { w.terminate(); reject(new Error("timed out")); }, 60000);
+    w.onmessage = (e) => { clearTimeout(stop); w.terminate(); e.data.ok ? resolve(e.data.res) : reject(new Error(e.data.error)); };
+    w.onerror = (e) => { clearTimeout(stop); w.terminate(); reject(new Error(e.message || "worker failed")); };
+    w.postMessage({ jobs: prep.jobs, note: prep.note });
+  });
+  const run = async () => {
+    setBusy(true); setErr(null);
+    const b = body();
+    try {
+      let out: any;
+      try { out = await inBrowser(await api("/api/sim/prepare", b)); }
+      catch { out = { ...(await api<any>("/api/sim/run", b)), engine: "server" }; }
+      setRes(out);
+    } catch (e: any) { setErr(String(e?.message ?? e)); } finally { setBusy(false); }
+  };
   useEffect(() => { setRes(null); }, [r.sessionKey, r.lap, r.driver]);
   const quick = (k: string) => {
     const p2 = rows.find((x) => x.position === 2), p1 = rows[0];
@@ -109,7 +127,7 @@ export default function Lab() {
             ))}
           </div>
           <div className="grid gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-            <Panel title="Distribution of finishing positions" tags={["MODEL"]} note={`${good[0].n_sims} Monte Carlo runs per scenario. Bars show how often the focus driver finished in each position.`}>
+            <Panel title="Distribution of finishing positions" tags={["MODEL"]} note={`${good[0].n_sims} Monte Carlo runs per scenario, ${res.engine === "browser" ? "simulated in your browser from inputs prepared by the server" : "simulated on the server"}. Bars show how often the focus driver finished in each position.`}>
               <PositionDist options={good.map((x: any) => ({ label: x.name, pos_hist: x.pos_hist }))} />
             </Panel>
             <Panel title={`Simulated front of the field — ${best?.name ?? good[0].name}`} tags={["MODEL"]} pad={false}>

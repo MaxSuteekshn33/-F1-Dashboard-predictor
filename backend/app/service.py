@@ -406,11 +406,17 @@ def safety_car(session_key: int, lap: int | None, driver: int | None, body: dict
 
 
 # ---------------------------------------------------------------- 9. simulation lab
-def lab(session_key: int, body: dict) -> dict:
-    """Run and compare user-defined scenarios. Each scenario: {name, lap, driver, pit_laps:[{lap,compound}], keep_plan,
-    rain_in_min, rain_intensity, rain_duration_min, wetness, track_temp_delta, safety_car:{lap,type,duration},
-    pit_duration_delta, overrides:{position/compound/tyre_age}, rival:{driver, pit_laps|stay_out}, random_incidents}."""
-    results = []
+LAB_NOTE = ("Scenario inputs are ASSUMPTIONS; starting positions, gaps and tyres are OBSERVED at the chosen lap; "
+            "pace, wear and pit loss are fitted from laps recorded up to that lap.")
+
+
+def lab_jobs(session_key: int, body: dict) -> list[dict]:
+    """Turn user-defined scenarios into ready-to-run simulation packages (no simulation happens here). Each
+    scenario: {name, lap, driver, pit_laps:[{lap,compound}], keep_plan, rain_in_min, rain_intensity, rain_duration_min,
+    wetness, track_temp_delta, safety_car:{lap,type,duration}, pit_duration_delta, overrides:{position/compound/tyre_age},
+    rival:{driver, pit_laps|stay_out}, random_incidents}. The packages are run by the server (`lab`) or, on the
+    Simulation Lab page, by the same engine ported to the browser — both produce the same result fields."""
+    jobs = []
     for i, s in enumerate(body.get("scenarios", [])[:4]):
         ctx = sim.context(session_key, s.get("lap"))
         st = ctx["st"]
@@ -419,7 +425,7 @@ def lab(session_key: int, body: dict) -> dict:
         me = next((r for r in run if r["driver_number"] == s.get("driver")), run[0] if run else None)
         name = s.get("name") or f"Scenario {i + 1}"
         if not me or total - st["lap"] < 1:
-            results.append({"name": name, "error": "Race not in progress at this lap."})
+            jobs.append({"name": name, "error": "Race not in progress at this lap."})
             continue
         lap_s = float(np.median([r["last_lap"] for r in run if r["last_lap"]]) or 90)
         R = total - st["lap"]
@@ -464,22 +470,36 @@ def lab(session_key: int, body: dict) -> dict:
                 plans[int(rv["driver"])] = [(int(p["lap"]), p["compound"]) for p in rv["pit_laps"]]; manual.append(int(rv["driver"]))
                 assumptions.append(f"Rival #{rv['driver']} plan forced: {rv['pit_laps']}.")
         scn["manual"] = manual
-        r = sim.run(ctx, plans, scn, n=int(body.get("n_sims", 1000)), seed=11, focus=me["driver_number"])
-        if "focus" not in r:
-            results.append({"name": name, "error": r.get("error", "simulation failed")}); continue
-        f = r["focus"]
-        ok = f["sims_alive"]
-        results.append({"name": name, "driver": me["code"], "driver_number": me["driver_number"], "lap": st["lap"], "total_laps": total,
-                        "plan": [{"lap": a, "compound": b} for a, b in plans.get(me["driver_number"], [])],
-                        "exp_pos": round(f["exp_pos"], 2), "p_win": round(f["p_win"], 4), "p_podium": round(f["p_podium"], 4),
-                        "p_win_se": round(f["p_win_se"], 4), "risk_pos_sd": round(f["risk"], 2), "pos_p10": f["pos_p10"], "pos_p90": f["pos_p90"],
-                        "p_dnf": round(f["p_dnf"], 3), "exp_race_time_remaining": round(float(f["sims_time"][ok].mean() - (me["gap_s"] or 0)), 1) if ok.any() else None,
-                        "time_p10": round(float(np.percentile(f["sims_time"][ok], 10) - (me["gap_s"] or 0)), 1) if ok.any() else None,
-                        "time_p90": round(float(np.percentile(f["sims_time"][ok], 90) - (me["gap_s"] or 0)), 1) if ok.any() else None,
-                        "pos_hist": [round(x, 4) for x in f["pos_hist"]], "blocked_laps": round(f["blocked_laps"], 1),
-                        "field": sorted([{"code": d["code"], "p_win": round(d["p_win"], 3), "exp_pos": round(d["exp_pos"], 1), "team_colour": d["team_colour"]}
-                                         for d in r["drivers"]], key=lambda d: d["exp_pos"])[:8],
-                        "assumptions": assumptions, "inputs": r["inputs"], "n_sims": r["n_sims"], "_t": f["sims_time"], "_ok": ok})
+        pk = sim.package(ctx, plans, scn, n=int(np.clip(int(body.get("n_sims", 1000)), 100, 20000)), seed=11, focus=me["driver_number"])
+        if pk.get("error") or pk.get("focus") is None:
+            jobs.append({"name": name, "error": pk.get("error", "simulation failed")}); continue
+        jobs.append({"name": name, "package": pk,
+                     "meta": {"driver": me["code"], "driver_number": me["driver_number"], "lap": st["lap"], "total_laps": total,
+                              "plan": [{"lap": a, "compound": b} for a, b in sorted(plans.get(me["driver_number"], []))],
+                              "gap_s": me["gap_s"] or 0, "assumptions": assumptions}})
+    return jobs
+
+
+def lab_result(job: dict, r: dict) -> dict:
+    """One scenario's result card from a finished simulation."""
+    if "focus" not in r:
+        return {"name": job["name"], "error": r.get("error", "simulation failed")}
+    mt, f = job["meta"], r["focus"]
+    ok, gap = f["sims_alive"], mt["gap_s"]
+    return {"name": job["name"], "driver": mt["driver"], "driver_number": mt["driver_number"], "lap": mt["lap"], "total_laps": mt["total_laps"],
+            "plan": mt["plan"],
+            "exp_pos": round(f["exp_pos"], 2), "p_win": round(f["p_win"], 4), "p_podium": round(f["p_podium"], 4),
+            "p_win_se": round(f["p_win_se"], 4), "risk_pos_sd": round(f["risk"], 2), "pos_p10": f["pos_p10"], "pos_p90": f["pos_p90"],
+            "p_dnf": round(f["p_dnf"], 3), "exp_race_time_remaining": round(float(f["sims_time"][ok].mean() - gap), 1) if ok.any() else None,
+            "time_p10": round(float(np.percentile(f["sims_time"][ok], 10) - gap), 1) if ok.any() else None,
+            "time_p90": round(float(np.percentile(f["sims_time"][ok], 90) - gap), 1) if ok.any() else None,
+            "pos_hist": [round(x, 4) for x in f["pos_hist"]], "blocked_laps": round(f["blocked_laps"], 1),
+            "field": sorted([{"code": d["code"], "p_win": round(d["p_win"], 3), "exp_pos": round(d["exp_pos"], 1), "team_colour": d["team_colour"]}
+                             for d in r["drivers"]], key=lambda d: d["exp_pos"])[:8],
+            "assumptions": mt["assumptions"], "inputs": r["inputs"], "n_sims": r["n_sims"], "_t": f["sims_time"], "_ok": ok}
+
+
+def lab_finish(results: list[dict]) -> dict:
     good = [r for r in results if "error" not in r]
     if good:
         ref = good[0]
@@ -492,8 +512,12 @@ def lab(session_key: int, body: dict) -> dict:
             r["best_alternative"] = None if r is best else best["name"]
     for r in results:
         r.pop("_t", None); r.pop("_ok", None)
-    return {"results": results, "note": "Scenario inputs are ASSUMPTIONS; starting positions, gaps and tyres are OBSERVED at the chosen lap; "
-                                        "pace, wear and pit loss are fitted from laps recorded up to that lap."}
+    return {"results": results, "note": LAB_NOTE}
+
+
+def lab(session_key: int, body: dict) -> dict:
+    """Run and compare user-defined scenarios on the server."""
+    return lab_finish([j if "error" in j else lab_result(j, sim.run_package(j["package"])) for j in lab_jobs(session_key, body)])
 
 
 # ---------------------------------------------------------------- 4. telemetry

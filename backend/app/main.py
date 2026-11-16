@@ -245,6 +245,13 @@ def sim_run(body: dict = Body(...)):
                  persist="lab" if len(laps) == 1 else None)
 
 
+@app.post("/api/sim/prepare")
+def sim_prepare(body: dict = Body(...)):
+    """The Simulation Lab's inputs without running anything: one ready-to-run package per scenario. The page runs
+    them in the visitor's browser (same engine, same run count) and falls back to /api/sim/run if it cannot."""
+    return guard(lambda: {"jobs": sv.lab_jobs(body.get("session_key") or default_key(), body), "note": sv.LAB_NOTE})
+
+
 @app.get("/api/live")
 def live_status():
     """What 'live' means right now: a real session in progress, a rehearsal, or nothing — plus the next session."""
