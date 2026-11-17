@@ -153,17 +153,26 @@ def command(session_key: int | None = None, lap: int | None = None):
 
 @app.get("/api/telemetry/laps")
 def tel_laps(session_key: int | None = None, lap: int | None = None):
-    return guard(sv.lap_table, session_key or default_key(), lap, light=True)
+    return guard(sv.lap_table, session_key or default_key(), lap, light=True, persist="laps")
 
 
 @app.get("/api/telemetry/compare")
 def tel_compare(d1: int, l1: int, d2: int | None = None, l2: int | None = None, session_key: int | None = None):
-    return guard(sv.telemetry_compare, session_key or default_key(), d1, l1, d2, l2)
+    # car telemetry for a finished race never changes: fetched from OpenF1 once, then served from the durable store
+    key = session_key or default_key()
+    pkey = store.state_key("compare", key, None, d1, l1, d2, l2)
+    hit = store.get(pkey)
+    if hit is not None:
+        return hit
+    out = guard(sv.telemetry_compare, key, d1, l1, d2, l2)
+    if isinstance(out, dict) and out.get("available", True) and not out.get("error"):
+        store.put(pkey, "compare", out)
+    return out
 
 
 @app.get("/api/telemetry/track")
 def tel_track(session_key: int | None = None, lap: int | None = None):
-    return guard(sv.track_map, session_key or default_key(), lap)
+    return guard(sv.track_map, session_key or default_key(), lap, persist="track")
 
 
 @app.get("/api/telemetry/cars")
@@ -387,9 +396,14 @@ def analytics(year: int | None = None):
 
 
 @app.get("/api/advisor")
-def advisor(session_key: int | None = None, lap: int | None = None, driver: int | None = None, parts: str = "weather,strategy,explain"):
+def advisor(session_key: int | None = None, lap: int | None = None, driver: int | None = None, parts: str = "weather,strategy,explain", defer: int = 0):
+    key = session_key or default_key()
+    if defer and "strategy" in parts and "weather" not in parts:
+        # see /api/strategy: a stored answer whole, otherwise the facts plus packages for the browser to simulate
+        hit = _stored("advisor", key, lap, driver, parts)
+        return hit if hit is not None else guard(sv.advisor, key, lap, driver, parts, light=True, defer=True)
     # the weather part reads an external forecast that can be unavailable at times, so only the other parts are stored
-    return guard(sv.advisor, session_key or default_key(), lap, driver, parts, persist=None if "weather" in parts else "advisor")
+    return guard(sv.advisor, key, lap, driver, parts, persist=None if "weather" in parts else "advisor")
 
 
 @app.get("/api/health/sources")

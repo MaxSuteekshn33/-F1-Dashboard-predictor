@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { API_BASE, api, useApi, useRace } from "@/lib/api";
+import { useResolved } from "@/lib/browserSim";
 import { Bar, Confidence, Driver, Notes, Panel, Stat, State, Tag, Tyre, dt, fmtLap, num, pct, teamColour } from "@/components/ui";
 
 const hm = (t: number) => new Date(t * 1000).toISOString().slice(11, 19);
@@ -29,7 +30,10 @@ export default function LiveRace() {
   const ready = on && r.sessionKey === live.session_key;
   const q = ready ? `session_key=${live.session_key}` : null;
   const pred = useApi<any>(q && `/api/predict/inrace?${q}`, live?.lap ?? 0);
-  const adv = useApi<any>(q && r.driver ? `/api/advisor?${q}&driver=${r.driver}&parts=strategy` : null, live?.lap ?? 0);
+  const advUrl = q && r.driver ? `/api/advisor?${q}&driver=${r.driver}&parts=strategy` : null;
+  const advRaw = useApi<any>(advUrl && `${advUrl}&defer=1`, live?.lap ?? 0);          // simulations run in this browser
+  const advDone = useResolved<any>(advRaw.data, () => api(advUrl!));
+  const adv = { ...advRaw, data: advDone.data, error: advRaw.error || advDone.error, loading: advRaw.loading || advDone.simulating };
   const wxa = useApi<any>(q && r.driver ? `/api/advisor?${q}&driver=${r.driver}&parts=weather` : null, live?.lap ?? 0);
 
   const [sk, setSk] = useState<number | "">(""); const [speed, setSpeed] = useState(10); const [startLap, setStartLap] = useState(1);

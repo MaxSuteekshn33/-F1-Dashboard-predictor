@@ -1,5 +1,6 @@
 "use client";
-import { useApi, useRace } from "@/lib/api";
+import { api, useApi, useRace } from "@/lib/api";
+import { useResolved } from "@/lib/browserSim";
 import { Confidence, Notes, Panel, State, Tag, pct, signed } from "@/components/ui";
 
 const TYPE: Record<string, string> = { WEATHER: "#3d8bf2", "SAFETY CAR": "#e0a100", "PIT WINDOW": "#2fbf71", "TRACK POSITION": "#2fbf71", UNDERCUT: "#c084fc", "DEFEND UNDERCUT": "#c084fc", STRATEGY: "#f2f3f5", "TYRE LIFE": "#ff5a52", DATA: "#a3a8b3" };
@@ -21,7 +22,10 @@ export default function Advisor() {
   const base = r.sessionKey && r.driver ? `/api/advisor?${r.q}&driver=${r.driver}` : null;
   const ex = useApi<any>(base && `${base}&parts=explain`, r.tick);
   const wx = useApi<any>(base && `${base}&parts=weather`, r.tick);
-  const st = useApi<any>(base && `${base}&parts=strategy`, r.tick);
+  // Strategy cards: a stored answer comes back whole; otherwise the server sends the facts and this browser runs the simulations.
+  const stRaw = useApi<any>(base && `${base}&parts=strategy&defer=1`, r.tick);
+  const stDone = useResolved<any>(stRaw.data, () => api(`${base}&parts=strategy`));
+  const st = { ...stRaw, data: stDone.data, error: stRaw.error || stDone.error, loading: stRaw.loading || stDone.simulating };
   const any = ex.data || wx.data || st.data;
   const note = any?.note;
   const recs = [...(wx.data?.recommendations || []), ...(st.data?.recommendations || [])].sort((a, b) => (ORDER[a.type] ?? 9) - (ORDER[b.type] ?? 9));

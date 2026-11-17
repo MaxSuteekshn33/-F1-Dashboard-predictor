@@ -66,9 +66,46 @@ def main() -> None:
     for body in ({}, {"safety_car": {"lap": 20, "type": "SC"}, "rain_in_min": 20, "rain_intensity": 0.5, "rain_duration_min": 20, "grid_position": 5}):
         record(f"next race {json.dumps(body)[:40]}", nextrace._simulate(body, defer=True),
                lambda d, dd: nextrace.next_finish(d, dd["options"], dd["grid_of"], dd["n_sims"], runs({"deferred": dd}, True)))
+    # recommendation cards: the facts and simulated numbers Python wrote each set of cards from, and the cards.
+    # The browser's `strategyRecs` must write the same text from the same numbers.
+    from app import strategy as sg
+    recs, adv = [], []
+    situations = [(key, l, d) for l in (8, 20, 33, 47, 60) for d in (w, 4, 63)]
+    for s2 in rs.race_sessions(8)[1:]:          # earlier races with a Safety Car or VSC lap
+        k2 = s2["session_key"]
+        hit = [l for l in range(5, rs.state(k2)["max_lap"] - 6) if rs.state(k2, l)["track_status"] in ("SC", "VSC")][:2]
+        situations += [(k2, l, r["driver_number"]) for l in hit for r in rs.state(k2, l)["rows"][:6:3]]
+        if len({c[0] for c in situations}) >= 3:
+            break
+    for k, lap, drv in situations:
+        ctx = sim.context(k, lap); st, m = ctx["st"], ctx["m"]
+        total = st["total_laps"] or st["max_lap"]
+        run = [r for r in st["rows"] if r["status"] == "RUNNING"]
+        me = next((r for r in run if r["driver_number"] == drv), run[0])
+        info = sv.clean(sv._advisor_info(st, m, me, total))
+        full = sv.strategy_view(k, st["lap"], me["driver_number"])
+        view = sv.clean({x: full.get(x) for x in ("strategies", "window", "n_sims", "pit_loss", "undercuts")})
+        scf = sv.safety_car(k, st["lap"], me["driver_number"]) if st["track_status"] in ("SC", "VSC") else None
+        scv = sv.clean({x: scf.get(x) for x in ("verdicts", "pit_loss")}) if scf else None
+        best = next((x for x in view["strategies"] if x.get("recommended") and x.get("exp_pos") is not None and x["rule_ok"]), None)
+        pair = None
+        if best and me["compound"] in sg.SLICKS and best["recommended_pit_lap"] and view.get("window"):
+            pair = sv.clean(weather.compare(ctx, me["driver_number"], [
+                {"label": "now", "plan": [(st["lap"] + 1, best["plan"][0]["compound"])] + [(x["lap"], x["compound"]) for x in best["plan"][1:]]},
+                {"label": "optimal", "plan": [(x["lap"], x["compound"]) for x in best["plan"]]}], {"random_incidents": False}))
+            pair = [{x: o[x] for x in ("label", "exp_pos", "blocked_laps", "time_vs_first")} for o in pair]
+        recs.append({"name": f"{k} lap {lap} #{drv}", "info": info, "sv": view, "pair": pair, "sc": scv,
+                     "python": sv.clean(sv.strategy_recs(info, view, pair, scv))})
+    print("recommendation situations:", len(recs), "| card types:", sorted({r["type"] for c in recs for r in c["python"]}), flush=True)
+    # two whole deferred recommendation answers, to check the browser's two-round flow end to end
+    for k, lap, drv in (situations[4], situations[-1]):
+        sv._strategy_cache.clear()           # otherwise the finished table from above is returned whole
+        d = sv.clean(sv.advisor.uncached(k, lap, drv, "strategy", defer=True))
+        assert "deferred" in d
+        adv.append({"name": f"{k} lap {lap} #{drv}", "data": d, "python_types": sorted({r["type"] for r in sv.advisor.uncached(k, lap, drv, "strategy")["recommendations"]})})
     out = Path(__file__).resolve().parents[2] / "frontend" / "tests" / "sim-fixture.json"
     out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps({"n": N, "cases": cases, "deferred": deferred}, separators=(",", ":")))
+    out.write_text(json.dumps({"n": N, "cases": cases, "deferred": deferred, "recs": recs, "advisor": adv}, separators=(",", ":")))
     print("wrote", out, out.stat().st_size, "bytes")
 
 

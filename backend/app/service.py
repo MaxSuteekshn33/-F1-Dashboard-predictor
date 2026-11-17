@@ -973,8 +973,101 @@ def analytics(year: int | None = None) -> dict:
 
 
 # ---------------------------------------------------------------- 11. advisor
+def _advisor_info(st: dict, m: dict, me: dict, total: int) -> dict:
+    """The observed and fitted facts the strategy recommendations quote (no simulation output). Numbers that are
+    printed as they are stored also come as text, so every engine prints them identically."""
+    slick = me["compound"] in sg.SLICKS
+    c = m["compounds"][me["compound"]] if slick else {}
+    return {"lap": st["lap"], "total": total, "track_status": st["track_status"], "slicks": list(sg.SLICKS),
+            "me": {k: me[k] for k in ("driver_number", "code", "position", "compound", "tyre_age", "interval_s")},
+            "tyre_age_txt": str(me["tyre_age"]), "interval_txt": str(me["interval_s"]),
+            "deg": c.get("deg"), "deg_source": c.get("source"), "n_laps": m["n_laps"], "prior": m["prior"],
+            "life_laps": (sg.LIFE_FRAC[me["compound"]] * total) if slick else None}
+
+
+def strategy_recs(info: dict, sv: dict, pair: list | None, sc: dict | None) -> list[dict]:
+    """The strategy recommendation cards, written only from: `info` (observed and fitted facts), `sv` (the simulated
+    strategy table), `pair` (pit now vs the plan's stop, simulated) and `sc` (Safety Car comparison, if neutralised).
+    Pure: same inputs, same text. Ported to the browser as `strategyRecs` in lib/sim.ts — keep the two in step."""
+    st, me, total = {"lap": info["lap"], "track_status": info["track_status"]}, info["me"], info["total"]
+    recs = []
+    conf = lambda s: {"score": round(float(np.clip(s, 0.05, 0.95)), 2), "level": "HIGH" if s >= 0.7 else "MEDIUM" if s >= 0.45 else "LOW"}
+    # 2 neutralisation in progress
+    if st["track_status"] in ("SC", "VSC") and sc:
+        v = (sc.get("verdicts") or {}).get("sc" if st["track_status"] == "SC" else "vsc")
+        if v:
+            recs.append({"type": "SAFETY CAR", "title": f"{st['track_status']} deployed — cheap stop available",
+                         "situation": f"Race control shows {st['track_status']} on lap {st['lap']}. {me['code']} is P{me['position']} on {me['compound']} tyres ({info['tyre_age_txt']} laps).",
+                         "supporting": [f"OBSERVED · race control status {st['track_status']}", f"HISTORICAL · green-flag pit loss {sc['pit_loss']['green']} s ({sc['pit_loss']['source']})",
+                                        f"ASSUMPTION · stop costs {sc['pit_loss']['sc' if st['track_status'] == 'SC' else 'vsc']} s under {st['track_status']}"],
+                         "decision": "Pit this lap" if v["better"] == "PIT" else "Stay out and keep track position",
+                         "advantage": f"{-v['pit_minus_stay_positions']:+.2f} expected positions for pitting vs staying out",
+                         "risk": "Neutralisation length is unknown; a short one reduces the saving." if v["better"] == "PIT" else "Rivals on fresh tyres attack at the restart.",
+                         "confidence": conf(0.4 + min(0.5, abs(v["pit_minus_stay_positions"]) / 2))})
+    # 3 pit window / track position
+    strat = [s for s in sv.get("strategies", []) if s.get("exp_pos") is not None and s["rule_ok"]]
+    best = next((s for s in strat if s.get("recommended")), None)
+    if best and me["compound"] in info["slicks"]:
+        w = sv.get("window")
+        nxt = best["recommended_pit_lap"]
+        if nxt and w:
+            opts = pair or []
+            if len(opts) == 2:
+                now, opt = opts
+                in_window = w["open"] <= st["lap"] + 1 <= w["close"]
+                dpos = now["exp_pos"] - opt["exp_pos"]
+                if nxt - st["lap"] <= 1 or (in_window and dpos < -0.05):
+                    decision = f"Box this lap for {best['plan'][0]['compound'].lower()}s"
+                elif now["blocked_laps"] > opt["blocked_laps"] + 0.5 and dpos > 0.05:
+                    decision = f"Extend the stint to lap {nxt} — pitting now rejoins in traffic"
+                else:
+                    decision = f"Stay out; target lap {nxt} (window laps {w['open']}–{w['close']})"
+                recs.append({"type": "PIT WINDOW" if "Extend" not in decision else "TRACK POSITION",
+                             "title": "Pit window open" if in_window else f"Pit window opens on lap {w['open']}",
+                             "situation": f"{me['code']} P{me['position']} on {me['compound'].lower()}s, {info['tyre_age_txt']} laps old, {total - st['lap']} laps to go. "
+                                          f"Optimiser's best plan: {best['name']} — next stop lap {nxt} ({best['plan'][0]['compound'].lower()}).",
+                             "supporting": [f"OBSERVED · tyre age {info['tyre_age_txt']}, " + (f"gap ahead {info['interval_txt']} s" if me["interval_s"] is not None and me["position"] > 1 else "leading the race"),
+                                            f"MODEL · {me['compound'].lower()} wear {info['deg']:.3f} s/lap ({info['deg_source']})",
+                                            f"MODEL · pit loss {sv['pit_loss']['seconds']} s ({sv['pit_loss']['source']})",
+                                            f"MODEL · pit now: expected P{now['exp_pos']:.1f}, {now['blocked_laps']} laps in traffic; pit lap {nxt}: expected P{opt['exp_pos']:.1f}, {opt['blocked_laps']} laps in traffic"],
+                             "decision": decision, "advantage": f"{abs(dpos):.2f} expected positions and {abs(now['time_vs_first'] - opt['time_vs_first']):.1f} s between the two options",
+                             "risk": "A Safety Car before the planned lap would make the later stop cheaper; one after an early stop costs track position.",
+                             "confidence": conf(0.35 + min(0.5, abs(dpos)) + (0.1 if info["n_laps"] > 150 else 0))})
+        alt = sorted([s for s in strat if s is not best], key=lambda s: s["exp_pos"])
+        if alt:
+            a = alt[0]
+            recs.append({"type": "STRATEGY", "title": f"Recommended: {best['name']}",
+                         "situation": f"Across {sv.get('n_sims')} simulated races, {best['name']} gives {me['code']} the best expected finish.",
+                         "supporting": [f"MODEL · {best['name']}: expected P{best['exp_pos']:.1f}, win {best['p_win'] * 100:.0f}%, podium {best['p_podium'] * 100:.0f}%",
+                                        f"MODEL · {a['name']}: expected P{a['exp_pos']:.1f}, win {a['p_win'] * 100:.0f}%, {a['exp_time_delta']:+.1f} s",
+                                        f"MODEL · tyre model on {info['n_laps']} green-flag laps; prior: {info['prior']}"],
+                         "decision": " then ".join(f"lap {x['lap']} → {x['compound'].lower()}" for x in best["plan"]) or "No further stop",
+                         "advantage": f"{a['exp_pos'] - best['exp_pos']:+.2f} expected positions vs {a['name']}",
+                         "risk": f"Finish range P{best['pos_p10']}–P{best['pos_p90']} (10th–90th percentile of simulations).",
+                         "confidence": conf(0.3 + min(0.6, (a["exp_pos"] - best["exp_pos"]) * 1.5))})
+    # 4 undercut attack / defence
+    for u in sv.get("undercuts", []):
+        if u["driver_number"] == me["driver_number"] or u["ahead"] == me["code"]:
+            attack = u["driver_number"] == me["driver_number"]
+            if not attack and not u["undercut_on"]:
+                continue
+            recs.append({"type": "UNDERCUT" if attack else "DEFEND UNDERCUT",
+                         "title": (f"Undercut on {u['ahead']} is {'ON' if u['undercut_on'] else 'not on'}" if attack else f"{u['driver']} can undercut"),
+                         "situation": f"{u['driver']} is {u['gap_s']} s behind {u['ahead']}. Fresh tyres are worth {u['fresh_tyre_gain_per_lap']} s/lap against {u['ahead']}'s current set.",
+                         "supporting": [f"OBSERVED · gap {u['gap_s']} s; {u['inputs']}", f"MODEL · two-lap undercut gain {u['undercut_gain_2laps']} s (after warm-up) vs gap → margin {u['undercut_margin']} s"],
+                         "decision": ("Pit now to undercut" if u["undercut_on"] else "Do not pit for the undercut — extend and look at the overcut") if attack else "Cover: pit the lap they pit, or respond next lap",
+                         "advantage": f"{u['undercut_margin']:+.1f} s margin over the gap" , "risk": "Rejoining in traffic or a slow stop erases a margin under ~1 s.",
+                         "confidence": conf(0.4 + min(0.45, abs(u["undercut_margin"]) / 3))})
+    # 5 tyre life
+    if me["compound"] in info["slicks"] and me["tyre_age"] is not None and me["tyre_age"] > info["life_laps"]:
+        recs.append({"type": "TYRE LIFE", "title": "Tyres beyond modelled life", "situation": f"{me['code']}'s {me['compound'].lower()}s are {info['tyre_age_txt']} laps old; modelled usable life here is ~{int(info['life_laps'])} laps.",
+                     "supporting": ["OBSERVED · tyre age from OpenF1 stints", "ASSUMPTION · usable-life share of race distance"], "decision": "Bring the stop forward unless track position is decisive",
+                     "advantage": "Avoids the wear cliff (modelled up to 3 s/lap).", "risk": "Life is an assumption — watch the actual lap-time trend.", "confidence": conf(0.4)})
+    return recs
+
+
 @state_cached("advisor")
-def advisor(session_key: int, lap: int | None, driver: int | None, parts: str = "weather,strategy,explain") -> dict:
+def advisor(session_key: int, lap: int | None, driver: int | None, parts: str = "weather,strategy,explain", defer: bool = False) -> dict:
     """Plain-English recommendations assembled only from computed module outputs — nothing is invented."""
     ctx = sim.context(session_key, lap)
     st, m = ctx["st"], ctx["m"]
@@ -1012,81 +1105,31 @@ def advisor(session_key: int, lap: int | None, driver: int | None, parts: str = 
         except Exception as e:
             out.setdefault("omitted", []).append(f"Weather recommendation omitted: {e}")
     if "strategy" in parts:
-        sv = strategy_view(session_key, st["lap"], me["driver_number"])
-        # 2 neutralisation in progress
-        if st["track_status"] in ("SC", "VSC"):
-            sc = safety_car(session_key, st["lap"], me["driver_number"])
-            v = (sc.get("verdicts") or {}).get("sc" if st["track_status"] == "SC" else "vsc")
-            if v:
-                recs.append({"type": "SAFETY CAR", "title": f"{st['track_status']} deployed — cheap stop available",
-                             "situation": f"Race control shows {st['track_status']} on lap {st['lap']}. {me['code']} is P{me['position']} on {me['compound']} tyres ({me['tyre_age']} laps).",
-                             "supporting": [f"OBSERVED · race control status {st['track_status']}", f"HISTORICAL · green-flag pit loss {sc['pit_loss']['green']} s ({sc['pit_loss']['source']})",
-                                            f"ASSUMPTION · stop costs {sc['pit_loss']['sc' if st['track_status'] == 'SC' else 'vsc']} s under {st['track_status']}"],
-                             "decision": "Pit this lap" if v["better"] == "PIT" else "Stay out and keep track position",
-                             "advantage": f"{-v['pit_minus_stay_positions']:+.2f} expected positions for pitting vs staying out",
-                             "risk": "Neutralisation length is unknown; a short one reduces the saving." if v["better"] == "PIT" else "Rivals on fresh tyres attack at the restart.",
-                             "confidence": conf(0.4 + min(0.5, abs(v["pit_minus_stay_positions"]) / 2))})
-        # 3 pit window / track position
-        strat = [s for s in sv.get("strategies", []) if s.get("exp_pos") is not None and s["rule_ok"]]
-        best = next((s for s in strat if s.get("recommended")), None)
-        if best and me["compound"] in sg.SLICKS:
-            w = sv.get("window")
-            nxt = best["recommended_pit_lap"]
-            if nxt and w:
-                opts = weather.compare(ctx, me["driver_number"], [
-                    {"label": "now", "plan": [(st["lap"] + 1, best["plan"][0]["compound"])] + [(x["lap"], x["compound"]) for x in best["plan"][1:]]},
-                    {"label": "optimal", "plan": [(x["lap"], x["compound"]) for x in best["plan"]]}], {"random_incidents": False})
-                if len(opts) == 2:
-                    now, opt = opts
-                    in_window = w["open"] <= st["lap"] + 1 <= w["close"]
-                    dpos = now["exp_pos"] - opt["exp_pos"]
-                    if nxt - st["lap"] <= 1 or (in_window and dpos < -0.05):
-                        decision = f"Box this lap for {best['plan'][0]['compound'].lower()}s"
-                    elif now["blocked_laps"] > opt["blocked_laps"] + 0.5 and dpos > 0.05:
-                        decision = f"Extend the stint to lap {nxt} — pitting now rejoins in traffic"
-                    else:
-                        decision = f"Stay out; target lap {nxt} (window laps {w['open']}–{w['close']})"
-                    recs.append({"type": "PIT WINDOW" if "Extend" not in decision else "TRACK POSITION",
-                                 "title": "Pit window open" if in_window else f"Pit window opens on lap {w['open']}",
-                                 "situation": f"{me['code']} P{me['position']} on {me['compound'].lower()}s, {me['tyre_age']} laps old, {total - st['lap']} laps to go. "
-                                              f"Optimiser's best plan: {best['name']} — next stop lap {nxt} ({best['plan'][0]['compound'].lower()}).",
-                                 "supporting": [f"OBSERVED · tyre age {me['tyre_age']}, " + (f"gap ahead {me['interval_s']} s" if me["interval_s"] is not None and me["position"] > 1 else "leading the race"),
-                                                f"MODEL · {me['compound'].lower()} wear {m['compounds'][me['compound']]['deg']:.3f} s/lap ({m['compounds'][me['compound']]['source']})",
-                                                f"MODEL · pit loss {sv['pit_loss']['seconds']} s ({sv['pit_loss']['source']})",
-                                                f"MODEL · pit now: expected P{now['exp_pos']:.1f}, {now['blocked_laps']} laps in traffic; pit lap {nxt}: expected P{opt['exp_pos']:.1f}, {opt['blocked_laps']} laps in traffic"],
-                                 "decision": decision, "advantage": f"{abs(dpos):.2f} expected positions and {abs(now['time_vs_first'] - opt['time_vs_first']):.1f} s between the two options",
-                                 "risk": "A Safety Car before the planned lap would make the later stop cheaper; one after an early stop costs track position.",
-                                 "confidence": conf(0.35 + min(0.5, abs(dpos)) + (0.1 if m["n_laps"] > 150 else 0))})
-            alt = sorted([s for s in strat if s is not best], key=lambda s: s["exp_pos"])
-            if alt:
-                a = alt[0]
-                recs.append({"type": "STRATEGY", "title": f"Recommended: {best['name']}",
-                             "situation": f"Across {sv.get('n_sims')} simulated races, {best['name']} gives {me['code']} the best expected finish.",
-                             "supporting": [f"MODEL · {best['name']}: expected P{best['exp_pos']:.1f}, win {best['p_win'] * 100:.0f}%, podium {best['p_podium'] * 100:.0f}%",
-                                            f"MODEL · {a['name']}: expected P{a['exp_pos']:.1f}, win {a['p_win'] * 100:.0f}%, {a['exp_time_delta']:+.1f} s",
-                                            f"MODEL · tyre model on {m['n_laps']} green-flag laps; prior: {m['prior']}"],
-                             "decision": " then ".join(f"lap {x['lap']} → {x['compound'].lower()}" for x in best["plan"]) or "No further stop",
-                             "advantage": f"{a['exp_pos'] - best['exp_pos']:+.2f} expected positions vs {a['name']}",
-                             "risk": f"Finish range P{best['pos_p10']}–P{best['pos_p90']} (10th–90th percentile of simulations).",
-                             "confidence": conf(0.3 + min(0.6, (a["exp_pos"] - best["exp_pos"]) * 1.5))})
-        # 4 undercut attack / defence
-        for u in sv.get("undercuts", []):
-            if u["driver_number"] == me["driver_number"] or u["ahead"] == me["code"]:
-                attack = u["driver_number"] == me["driver_number"]
-                if not attack and not u["undercut_on"]:
-                    continue
-                recs.append({"type": "UNDERCUT" if attack else "DEFEND UNDERCUT",
-                             "title": (f"Undercut on {u['ahead']} is {'ON' if u['undercut_on'] else 'not on'}" if attack else f"{u['driver']} can undercut"),
-                             "situation": f"{u['driver']} is {u['gap_s']} s behind {u['ahead']}. Fresh tyres are worth {u['fresh_tyre_gain_per_lap']} s/lap against {u['ahead']}'s current set.",
-                             "supporting": [f"OBSERVED · gap {u['gap_s']} s; {u['inputs']}", f"MODEL · two-lap undercut gain {u['undercut_gain_2laps']} s (after warm-up) vs gap → margin {u['undercut_margin']} s"],
-                             "decision": ("Pit now to undercut" if u["undercut_on"] else "Do not pit for the undercut — extend and look at the overcut") if attack else "Cover: pit the lap they pit, or respond next lap",
-                             "advantage": f"{u['undercut_margin']:+.1f} s margin over the gap" , "risk": "Rejoining in traffic or a slow stop erases a margin under ~1 s.",
-                             "confidence": conf(0.4 + min(0.45, abs(u["undercut_margin"]) / 3))})
-        # 5 tyre life
-        if me["compound"] in sg.SLICKS and me["tyre_age"] is not None and me["tyre_age"] > sg.LIFE_FRAC[me["compound"]] * total:
-            recs.append({"type": "TYRE LIFE", "title": "Tyres beyond modelled life", "situation": f"{me['code']}'s {me['compound'].lower()}s are {me['tyre_age']} laps old; modelled usable life here is ~{int(sg.LIFE_FRAC[me['compound']] * total)} laps.",
-                         "supporting": ["OBSERVED · tyre age from OpenF1 stints", "ASSUMPTION · usable-life share of race distance"], "decision": "Bring the stop forward unless track position is decisive",
-                         "advantage": "Avoids the wear cliff (modelled up to 3 s/lap).", "risk": "Life is an assumption — watch the actual lap-time trend.", "confidence": conf(0.4)})
+        info = _advisor_info(st, m, me, total)
+        slick = me["compound"] in sg.SLICKS
+
+        def pit_options(o: dict) -> list[dict]:        # "pit now" against the plan's own first stop
+            return [{"label": "now", "plan": [(st["lap"] + 1, o["plan"][0]["compound"])] + [(x["lap"], x["compound"]) for x in o["plan"][1:]]},
+                    {"label": "optimal", "plan": [(x["lap"], x["compound"]) for x in o["plan"]]}]
+
+        svd = strategy_view(session_key, st["lap"], me["driver_number"], defer=True) if defer else None
+        if svd is not None and "deferred" in svd:
+            # The visitor's browser runs the simulations and writes the cards with `advisorFinish` (lib/sim.ts),
+            # a port of `strategy_recs`. Which plan the simulations will favour is not known yet, so the
+            # pit-now comparison is prepared for every legal plan that has a pit window.
+            dd = svd["deferred"]
+            pit = {o["label"]: weather.compare_jobs(ctx, me["driver_number"], pit_options(o), {"random_incidents": False})
+                   for o in dd["opts"] if slick and o["rule_ok"] and o["plan"] and dd["windows"].get(o["label"])}
+            scd = safety_car(session_key, st["lap"], me["driver_number"], defer=True) if st["track_status"] in ("SC", "VSC") else None
+            out["deferred"] = {"kind": "advisor", "strategy": svd, "pitnow": pit, "sc": scd, "info": info}
+        else:
+            sv = svd if svd is not None else strategy_view(session_key, st["lap"], me["driver_number"])
+            sc = safety_car(session_key, st["lap"], me["driver_number"]) if st["track_status"] in ("SC", "VSC") else None
+            best = next((x for x in sv.get("strategies", []) if x.get("recommended") and x.get("exp_pos") is not None and x["rule_ok"]), None)
+            pair = None
+            if best and slick and best["recommended_pit_lap"] and sv.get("window"):
+                pair = weather.compare(ctx, me["driver_number"], pit_options(best), {"random_incidents": False})
+            recs += strategy_recs(info, sv, pair, sc)
     if "explain" in parts:
         # explanation of the win probability
         try:

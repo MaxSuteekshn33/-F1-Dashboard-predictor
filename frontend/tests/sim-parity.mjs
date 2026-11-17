@@ -2,7 +2,7 @@
 // Fixture: backend/tests/make_sim_fixture.py (20,000 runs per case on both sides).
 // Run: node --experimental-strip-types tests/sim-parity.mjs
 import { readFileSync } from "node:fs";
-import { runPackage, finishDeferred } from "../lib/sim.ts";
+import { runPackage, finishDeferred, strategyRecs, advisorPackages, advisorMiddle, advisorFinish, pyFixed } from "../lib/sim.ts";
 
 const fx = JSON.parse(readFileSync(new URL("./sim-fixture.json", import.meta.url)));
 // Allowed differences: several standard errors of the difference between two independent 20,000-run estimates.
@@ -68,6 +68,30 @@ for (const c of fx.deferred) {
     if (v.better !== w.better && Math.abs(v.pit_minus_stay_positions) > 0.25) { failures++; console.log(`  ✗ ${c.name}: verdict ${k} python ${v.better}, browser ${w.better}`); }
   }
   console.log(`${c.name}: ${failures === before ? "matches" : "DIFFERS"} · pick python ${a ?? "—"} / browser ${b ?? "—"} · ${(performance.now() - t0).toFixed(0)} ms`);
+}
+// Recommendation cards: from the same facts and numbers, the browser must write exactly the text Python wrote.
+let cards = 0;
+for (const c of fx.recs) {
+  const js = JSON.stringify(strategyRecs(c.info, c.sv, c.pair, c.sc)), py = JSON.stringify(c.python);
+  cards += c.python.length; checks++;
+  if (js !== py) {
+    failures++;
+    const a = c.python, b = JSON.parse(js);
+    for (let i = 0; i < Math.max(a.length, b.length); i++) if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) { console.log(`  ✗ ${c.name} card ${i}\n    python : ${JSON.stringify(a[i])}\n    browser: ${JSON.stringify(b[i])}`); break; }
+  }
+}
+console.log(`recommendation cards: ${fx.recs.length} situations, ${cards} cards — text ${failures ? "DIFFERS" : "identical to Python"}`);
+for (const [x, d, want] of [[3.25, 1, "3.2"], [3.35, 1, "3.4"], [0.125, 2, "0.12"], [-0.125, 2, "-0.12"], [2.5, 0, "2"], [1.15, 1, "1.1"], [-0.001, 2, "-0.00"], [1.005, 2, "1.00"]]) {
+  checks++; if (pyFixed(x, d) !== want) { failures++; console.log(`  ✗ pyFixed(${x}, ${d}) = ${pyFixed(x, d)}, Python prints ${want}`); }
+}
+// The two-round flow end to end (plans, then "pit now" against the favoured plan), at the page's own run count.
+for (const c of fx.advisor) {
+  const mid = advisorMiddle(c.data, advisorPackages(c.data).map(runPackage));
+  const out = advisorFinish(c.data, mid, mid.next.map((j) => runPackage(j.package)));
+  const types = [...new Set(out.recommendations.map((r) => r.type))].sort(); checks++;
+  const norm = (t) => t.map((x) => (x === "TRACK POSITION" ? "PIT WINDOW" : x)).join(",");     // which of the two is chosen can turn on a near-tie
+  if (!out.recommendations.length || norm(types) !== norm(c.python_types) || out.deferred) { failures++; console.log(`  ✗ ${c.name}: browser cards ${types} vs python ${c.python_types}`); }
+  console.log(`recommendations end to end, ${c.name}: ${types.join(", ")}`);
 }
 console.log(failures ? `\n${failures} differences beyond tolerance (${checks} checks)` : `\nAll ${checks} checks within tolerance.`);
 process.exit(failures ? 1 : 0);

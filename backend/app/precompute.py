@@ -41,7 +41,7 @@ def run(budget: float | None = None) -> dict:
 
     def per_lap(lap: int) -> bool:
         return (call(main.predict_inrace, session_key=key, lap=lap) and call(main.tel_pace, session_key=key, lap=lap)
-                and call(main.h_similar, session_key=key, lap=lap))
+                and call(main.h_similar, session_key=key, lap=lap) and call(main.tel_laps, session_key=key, lap=lap))
 
     def per_driver(lap: int, d: int) -> bool:
         return (call(main.strategy, session_key=key, lap=lap, driver=d, parts="overview")
@@ -54,7 +54,9 @@ def run(budget: float | None = None) -> dict:
     from . import nextrace, service as sv
     call(sv.prerace_prediction); call(nextrace.recent_pace)
     # most likely first: every lap for the default driver, then the rest of the podium, then the field at wider spacing
-    plan = [("lap", l, None) for l in laps] + [("drv", l, order[0]) for l in laps]
+    # the final lap is what every page opens on, so it goes first (with the track map, which needs one network call)
+    call(main.tel_track, session_key=key, lap=total)
+    plan = [("lap", total, None), ("drv", total, order[0])] + [("lap", l, None) for l in laps] + [("drv", l, order[0]) for l in laps]
     plan += [("drv", l, d) for d in order[1:3] for l in laps[::2]]
     plan += [("drv", l, d) for d in order[3:] for l in laps[::6]]
     for kind, lap, d in plan:

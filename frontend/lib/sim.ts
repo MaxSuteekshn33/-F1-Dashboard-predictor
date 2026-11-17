@@ -345,3 +345,129 @@ export function finishDeferred(data: any, results?: SimResult[]): any {
   } else throw new Error(`unknown deferred kind ${d.kind}`);
   return out;
 }
+
+// ---------------------------------------------------------------- recommendations (service.py strategy_recs)
+// Number formatting that prints exactly what Python's f-strings print.
+/** Python `f"{x:.{d}f}"`: correctly rounded, exact ties to even (JavaScript's toFixed rounds exact ties up). */
+export function pyFixed(x: number, d: number): string {
+  const p5 = Math.pow(5, d), y = x * 2 * Math.pow(10, d);
+  if (Number.isInteger(y) && Math.abs(y) % 2 === 1 && y % p5 === 0 && y / p5 / Math.pow(2, d + 1) === x) {     // an exact tie
+    const lo = Math.floor(y / 2), n = lo % 2 === 0 ? lo : lo + 1;
+    const s = (Math.abs(n) / Math.pow(10, d)).toFixed(d);
+    return (x < 0 ? "-" : "") + s;
+  }
+  const s = x.toFixed(d);
+  return Object.is(x, -0) ? "-" + s : s;
+}
+/** Python `f"{x:+.{d}f}"`. */
+const pySigned = (x: number, d: number) => (x < 0 || Object.is(x, -0) ? "" : "+") + pyFixed(x, d);
+/** Python `str(float)`: whole numbers keep their ".0". */
+const pyFloat = (x: number) => (Number.isInteger(x) ? x.toFixed(1) : String(x));
+/** Python `round(x, 2)` for the confidence score. */
+const pyRound2 = (x: number) => Number(pyFixed(x, 2));
+const confidence = (s: number) => ({ score: pyRound2(Math.min(0.95, Math.max(0.05, s))), level: s >= 0.7 ? "HIGH" : s >= 0.45 ? "MEDIUM" : "LOW" });
+
+/** The strategy recommendation cards. Pure: written only from `info` (observed and fitted facts), `sv` (the
+ *  simulated strategy table), `pair` (pit now vs the plan's stop) and `sc` (Safety Car comparison, if neutralised). */
+export function strategyRecs(info: any, sv: any, pair: any[] | null, sc: any | null): any[] {
+  const me = info.me, total = info.total, lap = info.lap, ts = info.track_status;
+  const low = (c: string) => c.toLowerCase();
+  const recs: any[] = [];
+  // 2 neutralisation in progress
+  if ((ts === "SC" || ts === "VSC") && sc) {
+    const v = (sc.verdicts || {})[ts === "SC" ? "sc" : "vsc"];
+    if (v) recs.push({ type: "SAFETY CAR", title: `${ts} deployed — cheap stop available`,
+      situation: `Race control shows ${ts} on lap ${lap}. ${me.code} is P${me.position} on ${me.compound} tyres (${info.tyre_age_txt} laps).`,
+      supporting: [`OBSERVED · race control status ${ts}`, `HISTORICAL · green-flag pit loss ${pyFloat(sc.pit_loss.green)} s (${sc.pit_loss.source})`,
+        `ASSUMPTION · stop costs ${pyFloat(sc.pit_loss[ts === "SC" ? "sc" : "vsc"])} s under ${ts}`],
+      decision: v.better === "PIT" ? "Pit this lap" : "Stay out and keep track position",
+      advantage: `${pySigned(-v.pit_minus_stay_positions, 2)} expected positions for pitting vs staying out`,
+      risk: v.better === "PIT" ? "Neutralisation length is unknown; a short one reduces the saving." : "Rivals on fresh tyres attack at the restart.",
+      confidence: confidence(0.4 + Math.min(0.5, Math.abs(v.pit_minus_stay_positions) / 2)) });
+  }
+  // 3 pit window / track position
+  const strat = (sv.strategies || []).filter((s: any) => s.exp_pos !== null && s.exp_pos !== undefined && s.rule_ok);
+  const best = strat.find((s: any) => s.recommended);
+  if (best && info.slicks.includes(me.compound)) {
+    const w = sv.window, nxt = best.recommended_pit_lap;
+    if (nxt && w && pair && pair.length === 2) {
+      const [now, opt] = pair;
+      const inWindow = w.open <= lap + 1 && lap + 1 <= w.close;
+      const dpos = now.exp_pos - opt.exp_pos;
+      let decision: string;
+      if (nxt - lap <= 1 || (inWindow && dpos < -0.05)) decision = `Box this lap for ${low(best.plan[0].compound)}s`;
+      else if (now.blocked_laps > opt.blocked_laps + 0.5 && dpos > 0.05) decision = `Extend the stint to lap ${nxt} — pitting now rejoins in traffic`;
+      else decision = `Stay out; target lap ${nxt} (window laps ${w.open}–${w.close})`;
+      recs.push({ type: decision.includes("Extend") ? "TRACK POSITION" : "PIT WINDOW",
+        title: inWindow ? "Pit window open" : `Pit window opens on lap ${w.open}`,
+        situation: `${me.code} P${me.position} on ${low(me.compound)}s, ${info.tyre_age_txt} laps old, ${total - lap} laps to go. ` +
+          `Optimiser's best plan: ${best.name} — next stop lap ${nxt} (${low(best.plan[0].compound)}).`,
+        supporting: [`OBSERVED · tyre age ${info.tyre_age_txt}, ` + (me.interval_s !== null && me.interval_s !== undefined && me.position > 1 ? `gap ahead ${info.interval_txt} s` : "leading the race"),
+          `MODEL · ${low(me.compound)} wear ${pyFixed(info.deg, 3)} s/lap (${info.deg_source})`,
+          `MODEL · pit loss ${pyFloat(sv.pit_loss.seconds)} s (${sv.pit_loss.source})`,
+          `MODEL · pit now: expected P${pyFixed(now.exp_pos, 1)}, ${pyFloat(now.blocked_laps)} laps in traffic; pit lap ${nxt}: expected P${pyFixed(opt.exp_pos, 1)}, ${pyFloat(opt.blocked_laps)} laps in traffic`],
+        decision, advantage: `${pyFixed(Math.abs(dpos), 2)} expected positions and ${pyFixed(Math.abs(now.time_vs_first - opt.time_vs_first), 1)} s between the two options`,
+        risk: "A Safety Car before the planned lap would make the later stop cheaper; one after an early stop costs track position.",
+        confidence: confidence(0.35 + Math.min(0.5, Math.abs(dpos)) + (info.n_laps > 150 ? 0.1 : 0)) });
+    }
+    const alt = strat.filter((s: any) => s !== best).map((s: any, i: number) => ({ s, i })).sort((a: any, b: any) => a.s.exp_pos - b.s.exp_pos || a.i - b.i).map((x: any) => x.s);
+    if (alt.length) {
+      const a = alt[0];
+      recs.push({ type: "STRATEGY", title: `Recommended: ${best.name}`,
+        situation: `Across ${sv.n_sims} simulated races, ${best.name} gives ${me.code} the best expected finish.`,
+        supporting: [`MODEL · ${best.name}: expected P${pyFixed(best.exp_pos, 1)}, win ${pyFixed(best.p_win * 100, 0)}%, podium ${pyFixed(best.p_podium * 100, 0)}%`,
+          `MODEL · ${a.name}: expected P${pyFixed(a.exp_pos, 1)}, win ${pyFixed(a.p_win * 100, 0)}%, ${pySigned(a.exp_time_delta, 1)} s`,
+          `MODEL · tyre model on ${info.n_laps} green-flag laps; prior: ${info.prior}`],
+        decision: best.plan.map((x: any) => `lap ${x.lap} → ${low(x.compound)}`).join(" then ") || "No further stop",
+        advantage: `${pySigned(a.exp_pos - best.exp_pos, 2)} expected positions vs ${a.name}`,
+        risk: `Finish range P${best.pos_p10}–P${best.pos_p90} (10th–90th percentile of simulations).`,
+        confidence: confidence(0.3 + Math.min(0.6, (a.exp_pos - best.exp_pos) * 1.5)) });
+    }
+  }
+  // 4 undercut attack / defence
+  for (const u of sv.undercuts || []) {
+    if (u.driver_number === me.driver_number || u.ahead === me.code) {
+      const attack = u.driver_number === me.driver_number;
+      if (!attack && !u.undercut_on) continue;
+      recs.push({ type: attack ? "UNDERCUT" : "DEFEND UNDERCUT",
+        title: attack ? `Undercut on ${u.ahead} is ${u.undercut_on ? "ON" : "not on"}` : `${u.driver} can undercut`,
+        situation: `${u.driver} is ${pyFloat(u.gap_s)} s behind ${u.ahead}. Fresh tyres are worth ${pyFloat(u.fresh_tyre_gain_per_lap)} s/lap against ${u.ahead}'s current set.`,
+        supporting: [`OBSERVED · gap ${pyFloat(u.gap_s)} s; ${u.inputs}`, `MODEL · two-lap undercut gain ${pyFloat(u.undercut_gain_2laps)} s (after warm-up) vs gap → margin ${pyFloat(u.undercut_margin)} s`],
+        decision: attack ? (u.undercut_on ? "Pit now to undercut" : "Do not pit for the undercut — extend and look at the overcut") : "Cover: pit the lap they pit, or respond next lap",
+        advantage: `${pySigned(u.undercut_margin, 1)} s margin over the gap`, risk: "Rejoining in traffic or a slow stop erases a margin under ~1 s.",
+        confidence: confidence(0.4 + Math.min(0.45, Math.abs(u.undercut_margin) / 3)) });
+    }
+  }
+  // 5 tyre life
+  if (info.slicks.includes(me.compound) && me.tyre_age !== null && me.tyre_age !== undefined && me.tyre_age > info.life_laps)
+    recs.push({ type: "TYRE LIFE", title: "Tyres beyond modelled life", situation: `${me.code}'s ${low(me.compound)}s are ${info.tyre_age_txt} laps old; modelled usable life here is ~${Math.trunc(info.life_laps)} laps.`,
+      supporting: ["OBSERVED · tyre age from OpenF1 stints", "ASSUMPTION · usable-life share of race distance"], decision: "Bring the stop forward unless track position is decisive",
+      advantage: "Avoids the wear cliff (modelled up to 3 s/lap).", risk: "Life is an assumption — watch the actual lap-time trend.", confidence: confidence(0.4) });
+  return recs;
+}
+
+const REC_ORDER: Record<string, number> = { "SAFETY CAR": 0, WEATHER: 1, "PIT WINDOW": 2, "TRACK POSITION": 2, UNDERCUT: 3, "DEFEND UNDERCUT": 3, STRATEGY: 4, "TYRE LIFE": 5, DATA: 6 };
+
+/** Recommendations arrive with `deferred.kind === "advisor"`. Step 1: the strategy (and Safety Car) simulations. */
+export function advisorPackages(data: any): Package[] {
+  const d = data.deferred;
+  return [...d.strategy.deferred.jobs, ...(d.sc?.deferred ? d.sc.deferred.jobs : [])].map((j: any) => j.package);
+}
+/** Step 2: with step 1's results, the finished strategy table and the two "pit now vs plan" packages to run next (if any). */
+export function advisorMiddle(data: any, results: SimResult[]): { sv: any; sc: any | null; next: any[] } {
+  const d = data.deferred, n = d.strategy.deferred.jobs.length;
+  const sv = finishDeferred(d.strategy, results.slice(0, n));
+  const sc = d.sc ? (d.sc.deferred ? finishDeferred(d.sc, results.slice(n)) : d.sc) : null;
+  const best = (sv.strategies || []).find((s: any) => s.recommended && s.exp_pos !== null && s.rule_ok);
+  const next = best && sv.window && best.recommended_pit_lap && d.pitnow[best.label] ? d.pitnow[best.label] : [];
+  return { sv, sc, next };
+}
+/** Step 3: write the cards. */
+export function advisorFinish(data: any, mid: { sv: any; sc: any | null; next: any[] }, pairResults: SimResult[]): any {
+  const out = { ...data, engine: "browser" };
+  delete out.deferred;
+  const pair = mid.next.length ? compareTable(mid.next, false, pairResults) : null;
+  const recs = [...(data.recommendations || []), ...strategyRecs(data.deferred.info, mid.sv, pair, mid.sc)];
+  out.recommendations = recs.map((r, i) => ({ r, i })).sort((a, b) => (REC_ORDER[a.r.type] ?? 9) - (REC_ORDER[b.r.type] ?? 9) || a.i - b.i).map((x) => x.r);
+  return out;
+}
