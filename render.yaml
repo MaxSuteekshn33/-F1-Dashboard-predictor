@@ -1,26 +1,30 @@
 # Render blueprint for the APEX backend (FastAPI). The Next.js front end is deployed separately on Vercel.
-# Free plan: the service starts from the committed snapshot in backend/seed/ (database + trained models),
-# so it needs no disk and no training. See README → "Hosting" for the trade-offs and the paid alternative.
+# The service starts from the committed snapshot in backend/seed/ (database + trained models), so it needs no
+# disk and no training. Instance: Pro (2 CPU, 4 GB). On the free instance (0.1 CPU, 512 MB) set
+# APEX_MAX_CONCURRENCY and the two thread counts to "1" and leave APEX_KEEP_AWAKE unset. See README → "Hosting".
 services:
   - type: web
     name: apex-f1-backend
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./backend/Dockerfile
-    plan: free
+    plan: pro
     healthCheckPath: /api/health
     envVars:
       - key: CORS_ORIGINS
         value: "*"
-      # keep memory inside the free plan's 512 MB: one heavy request at a time, single-threaded maths
+      # heavy requests (models, simulations) allowed at once; each needs roughly 100 MB on top of ~350 MB at rest
       - key: APEX_MAX_CONCURRENCY
-        value: "1"
+        value: "4"
       - key: MALLOC_ARENA_MAX
         value: "2"
       - key: OMP_NUM_THREADS
-        value: "1"
+        value: "2"
       - key: OPENBLAS_NUM_THREADS
-        value: "1"
+        value: "2"
+      # a paid instance does not sleep, so it has no need to ping itself
+      - key: APEX_KEEP_AWAKE
+        value: "0"
       # Optional paid OpenF1 account for real-time data: add OPENF1_USERNAME and OPENF1_PASSWORD
       # in the service's Environment tab after it is created.
       # Optional: keep finished results across restarts. Run supabase/cache.sql, then add SUPABASE_URL and

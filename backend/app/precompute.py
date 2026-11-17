@@ -56,6 +56,14 @@ def run(budget: float | None = None) -> dict:
     # most likely first: every lap for the default driver, then the rest of the podium, then the field at wider spacing
     # the final lap is what every page opens on, so it goes first (with the track map, which needs one network call)
     call(main.tel_track, session_key=key, lap=total)
+    # the Telemetry page opens on the winner's fastest lap against their latest lap (car data, one OpenF1 fetch each)
+    try:
+        mine = next(d for d in main.tel_laps(session_key=key, lap=total)["drivers"] if d["driver_number"] == order[0])
+        ok = [x for x in mine["laps"] if x["t"] and not x["pit"]]
+        if ok:
+            call(main.tel_compare, d1=order[0], l1=min(ok, key=lambda x: x["t"])["lap"], d2=order[0], l2=ok[-1]["lap"], session_key=key)
+    except Exception as e:
+        print(f"[precompute] default lap comparison skipped: {type(e).__name__}: {e}", flush=True)
     plan = [("lap", total, None), ("drv", total, order[0])] + [("lap", l, None) for l in laps] + [("drv", l, order[0]) for l in laps]
     plan += [("drv", l, d) for d in order[1:3] for l in laps[::2]]
     plan += [("drv", l, d) for d in order[3:] for l in laps[::6]]
