@@ -120,7 +120,30 @@ def mode(sess: dict, newest: float | None) -> dict:
     return {"mode": "HISTORICAL", "data_age_s": age, "reason": "Session finished — showing stored timing data. Use the lap control to replay it."}
 
 
+_state_memo: dict = {}
+
+
 def state(session_key: int, lap: int | None = None) -> dict:
+    """Race state at an as-of lap. For a finished race the answer cannot change, and every request asks for it at
+    least once, so it is kept per (race, lap, data fingerprint). Callers get their own copy of the top level
+    and of each driver row, so adding fields to them (as the timing screen does) never leaks into the cache."""
+    d = load(session_key)
+    if clock.virtual_now(session_key) is None:
+        key = (session_key, lap, len(d["laps"]), d["max_lap"], len(d["stints"]), d.get("newest_any"))
+        hit = _state_memo.get(key)
+        if hit is None or hit[0] < time.time():
+            st = _state(session_key, lap)
+            if st["mode"]["mode"] != "HISTORICAL":
+                return st
+            if len(_state_memo) > 400:
+                _state_memo.clear()
+            hit = _state_memo[key] = (time.time() + 600, st)
+        st = hit[1]
+        return {**st, "rows": [dict(r) for r in st["rows"]]}
+    return _state(session_key, lap)
+
+
+def _state(session_key: int, lap: int | None = None) -> dict:
     d = load(session_key)
     sess, laps, lead = d["session"], d["laps"], d["lead_end"]
     newest = float(laps.end.max()) if len(laps) and laps.end.notna().any() else None
