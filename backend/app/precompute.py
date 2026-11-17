@@ -50,6 +50,9 @@ def run(budget: float | None = None) -> dict:
                 and call(main.advisor, session_key=key, lap=lap, driver=d, parts="explain")
                 and call(main.safetycar, {"session_key": key, "lap": lap, "driver": d}))
 
+    # the slow one-off pieces behind the Next Race page (feature frame, recent pace) — so the running server loads them
+    from . import nextrace, service as sv
+    call(sv.prerace_prediction); call(nextrace.recent_pace)
     # most likely first: every lap for the default driver, then the rest of the podium, then the field at wider spacing
     plan = [("lap", l, None) for l in laps] + [("drv", l, order[0]) for l in laps]
     plan += [("drv", l, d) for d in order[1:3] for l in laps[::2]]

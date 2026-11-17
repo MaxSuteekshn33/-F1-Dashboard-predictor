@@ -10,3 +10,4 @@ frontend/next-env.d.ts
 .env
 backend/catboost_info/
 backend/precomputed.db
+backend/frame-*.pkl

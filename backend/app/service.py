@@ -4,7 +4,7 @@ from __future__ import annotations
 import json, math, time
 import numpy as np
 import pandas as pd
-from . import db, cache, racestate as rs, strategy as sg, sim, prerace, inrace, weather
+from . import db, cache, racestate as rs, strategy as sg, sim, prerace, inrace, weather, store
 from .cache import cached
 from .connectors.openf1 import openf1, iso
 from .connectors.others import jolpica
@@ -122,6 +122,29 @@ def _race(race_id: int) -> dict:
                 "FROM f1db_races r JOIN f1db_grands_prix g ON g.id=r.grand_prix_id JOIN f1db_circuits c ON c.id=r.circuit_id WHERE r.id=:i", i=race_id)[0]
 
 
+def _feature_frame(extra: pd.DataFrame | None) -> pd.DataFrame:
+    """The pre-race feature frame, kept on disk. Building it walks every race since 1988 and takes long enough on a
+    small host to hold up everything else (including the platform's health check), so it is built once per code
+    + data snapshot + upcoming-race entry list — normally while the image is built — and loaded afterwards.
+    The loaded frame is the same frame; nothing about the prediction changes."""
+    import hashlib
+    sig = hashlib.sha1((store.version() + (extra.to_json() if extra is not None else "")).encode()).hexdigest()[:16]
+    path = store.PATH.parent / f"frame-{sig}.pkl"
+    try:
+        if path.exists():
+            return pd.read_pickle(path)
+    except Exception:
+        pass
+    f = prerace.build_frame(extra)
+    try:
+        for old in sorted(store.PATH.parent.glob("frame-*.pkl"), key=lambda q: q.stat().st_mtime)[:-2]:
+            old.unlink()
+        f.to_pickle(path)
+    except Exception:
+        pass
+    return f
+
+
 @cached(ttl=1800)
 def prerace_prediction(race_id: int | None = None) -> dict:
     race = _race(race_id) if race_id else _next_race()
@@ -153,7 +176,7 @@ def prerace_prediction(race_id: int | None = None) -> dict:
         except SourceError:
             notes.append("Jolpica unavailable — qualifying result could not be checked.")
         extra = ent
-    f = prerace.build_frame(extra)
+    f = _feature_frame(extra)
     rows = f[f.race_id == race["race_id"]].reset_index(drop=True)
     if not len(rows):
         return {"available": False, "reason": "No entries found for this race.", "race": race}

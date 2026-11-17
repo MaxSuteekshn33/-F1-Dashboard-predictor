@@ -27,7 +27,19 @@ def _circuit_key(circuit_id: str, before_year: int) -> tuple[int | None, list[in
 
 @cached(ttl=6 * 3600, maxsize=8)
 def recent_pace(n: int = 4) -> dict:
-    """Each driver's race-pace gap to the field median (s/lap), averaged over the last `n` stored races."""
+    """Each driver's race-pace gap to the field median (s/lap), averaged over the last `n` stored races. Kept in
+    the durable store once those races are finished, so a restart does not refit four races."""
+    races = rs.race_sessions(n)
+    done = bool(races) and all(rs.state(s["session_key"])["mode"]["mode"] == "HISTORICAL" for s in races[:1])
+    key = store.plain_key("recent_pace", n, [(s["session_key"], rs.state(s["session_key"])["max_lap"]) for s in races]) if done else None
+    out = store.get(key)
+    if out is None:
+        out = _recent_pace(n)
+        store.put(key, "recent_pace", out)
+    return out
+
+
+def _recent_pace(n: int) -> dict:
     acc: dict[str, list[float]] = {}
     used = []
     for s in rs.race_sessions(n):

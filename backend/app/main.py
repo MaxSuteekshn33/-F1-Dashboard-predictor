@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(asyncio.to_thread(_warm)))
     tasks.append(asyncio.create_task(asyncio.to_thread(store.remote_prune)))
     if os.getenv("RENDER_EXTERNAL_URL") and os.getenv("APEX_KEEP_AWAKE", "1") == "1":
+        _awake["enabled"] = True
         tasks.append(asyncio.create_task(_keep_awake(os.environ["RENDER_EXTERNAL_URL"])))
     if os.getenv("APEX_AUTO_RETRAIN", "0") == "1":
         tasks.append(asyncio.create_task(asyncio.to_thread(retrain.run)))
@@ -31,7 +32,8 @@ async def lifespan(app: FastAPI):
 
 
 _last_request = {"t": 0.0}
-_awake = {"pings": 0, "last": None, "last_error": None}
+_awake = {"enabled": False, "pings": 0, "last": None, "last_error": None}
+_started = time.time()
 
 
 async def _keep_awake(url: str) -> None:
@@ -126,7 +128,7 @@ def default_key() -> int:
 def health():
     """Liveness probe for hosting platforms; also reports first-time setup progress."""
     from .config import SEEDED
-    return {"ok": True, "bootstrap": bootstrap.state, "started_from_snapshot": SEEDED, "result_store": store.status(), "keep_awake": _awake}
+    return {"ok": True, "bootstrap": bootstrap.state, "started_from_snapshot": SEEDED, "uptime_s": round(time.time() - _started), "result_store": store.status(), "keep_awake": _awake}
 
 
 @app.get("/api/status")
