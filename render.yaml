@@ -13,9 +13,11 @@ services:
     envVars:
       - key: CORS_ORIGINS
         value: "*"
-      # heavy requests (models, simulations) allowed at once; each needs roughly 100 MB on top of ~350 MB at rest
+      # heavy requests (models, simulations) allowed at once. Measured on the Pro instance with six simultaneous
+      # server-side strategy simulations: 2 at once finished in 8.6 s, 4 at once in 14-15 s (the Python threads
+      # contend for one interpreter), so 2 — which is also the code's default — is the setting to keep.
       - key: APEX_MAX_CONCURRENCY
-        value: "4"
+        value: "2"
       - key: MALLOC_ARENA_MAX
         value: "2"
       - key: OMP_NUM_THREADS
