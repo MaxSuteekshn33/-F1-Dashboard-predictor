@@ -85,7 +85,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <Link href="/" className="block px-6 pb-5 pt-6" aria-label="APEX F1 Intelligence — Command Centre">
             <div className="flex items-center gap-3">
               <span className="flex gap-[3px]" aria-hidden><span className="h-6 w-[5px] -skew-x-[20deg] bg-f1" /><span className="h-6 w-[5px] -skew-x-[20deg] bg-f1/70" /><span className="h-6 w-[5px] -skew-x-[20deg] bg-f1/40" /></span>
-              <span className="font-display text-[23px] font-extrabold tracking-[.06em]">APEX</span>
+              <span className="font-display text-[28px] font-bold leading-none tracking-[.06em]">APEX</span>
             </div>
             <div className="mt-1.5 text-[10px] font-bold uppercase tracking-[.26em] text-faint">F1 Intelligence</div>
           </Link>

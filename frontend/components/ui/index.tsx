@@ -69,7 +69,7 @@ export function Stat({ label, value, sub, tag, accent }: { label: string; value:
     <div className="glass px-4 py-3.5">
       <div className="flex items-center justify-between gap-2 text-[10.5px] font-bold uppercase tracking-[.12em] text-faint"><span className="truncate">{label}</span>
         {tag && <span className="h-2.5 w-[3px] shrink-0 -skew-x-12" style={{ background: TAGS[tag] || TAGS.UNAVAILABLE }} title={`${tag} — ${TAG_HELP[tag] || ""}`} />}</div>
-      <div className="mt-2 font-display text-[23px] font-bold leading-none tracking-[-.005em] [font-variant-numeric:tabular-nums]" style={accent ? { color: accent } : undefined}>{value}</div>
+      <div className="mt-2 font-display text-[29px] font-semibold leading-none tracking-[.01em] [font-variant-numeric:tabular-nums]" style={accent ? { color: accent } : undefined}>{value}</div>
       {sub && <div className="mt-1.5 truncate text-[11px] text-dim" title={typeof sub === "string" ? sub : undefined}>{sub}</div>}
     </div>
   );
