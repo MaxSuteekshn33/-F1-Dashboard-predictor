@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, score, type Pick } from "@/lib/supabase";
 import { api } from "@/lib/api";
+import Link from "next/link";
 import { Notes, Panel, State, Tabs, dt, teamColour } from "@/components/ui";
+import { Auth } from "@/components/Auth";
 
 const EMPTY: Pick = { winner: "", p2: "", p3: "", fastest_lap: null, safety_car: null, winner_stops: null };
 const RULES = ["Winner in the right place: 10 points", "Second place exact: 6 · third place exact: 4", "A podium driver in the wrong slot: 2", "Fastest lap: 3", "Safety Car deployed, yes or no: 3", "Number of pit stops the winner makes: 3"];
@@ -13,37 +15,6 @@ function Countdown({ to }: { to: number }) {
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
   const s = Math.max(0, (to - now) / 1000), d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
   return <span className="num">{d > 0 ? `${d}d ` : ""}{h}h {m}m</span>;
-}
-
-function Auth() {
-  const [mode, setMode] = useState("in");
-  const [email, setEmail] = useState(""); const [pw, setPw] = useState(""); const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); if (!supabase) return;
-    setBusy(true); setMsg(null);
-    const res = mode === "in" ? await supabase.auth.signInWithPassword({ email, password: pw })
-      : await supabase.auth.signUp({ email, password: pw, options: { data: { display_name: name.trim() } } });
-    setBusy(false);
-    if (res.error) setMsg({ ok: false, text: res.error.message });
-    else if (mode === "up" && !res.data.session) setMsg({ ok: true, text: "Account created. Check your email for a confirmation link, then sign in." });
-  };
-  return (
-    <div className="mx-auto max-w-md">
-      <Panel title="Join the prediction game">
-        <p className="mb-4 text-[12.5px] leading-relaxed text-dim">Make your picks before each race, score points when the result is in, and compare with friends in a private league. Points only — no money is involved.</p>
-        <div className="mb-4"><Tabs tabs={[["in", "Sign in"], ["up", "Create account"]]} value={mode} onChange={(v) => { setMode(v); setMsg(null); }} /></div>
-        <form onSubmit={submit} className="space-y-3 text-xs">
-          {mode === "up" && <label className="flex flex-col gap-1.5 text-dim">Display name (shown to your leagues)<input type="text" required minLength={2} maxLength={30} value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" /></label>}
-          <label className="flex flex-col gap-1.5 text-dim">Email<input type="text" inputMode="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-          <label className="flex flex-col gap-1.5 text-dim">Password{mode === "up" && " (at least 8 characters)"}<input type="password" required minLength={mode === "up" ? 8 : 1} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete={mode === "in" ? "current-password" : "new-password"}
-            className="rounded-[10px] border border-line bg-white/[0.06] px-2.5 py-1.5 text-[12.5px] text-ink outline-none focus:border-white/35" /></label>
-          <button className="btn primary w-full" disabled={busy} aria-busy={busy}>{busy ? "Please wait…" : mode === "in" ? "Sign in" : "Create account"}</button>
-          {msg && <div role="status" className={`rounded-xl border px-3 py-2 ${msg.ok ? "border-good/40 bg-good/10 text-good" : "border-bad/30 bg-bad/10 text-[#ffb3ae]"}`}>{msg.text}</div>}
-        </form>
-      </Panel>
-    </div>
-  );
 }
 
 function DriverSelect({ drivers, value, onChange, exclude = [], label, disabled, optional }: any) {
@@ -140,7 +111,7 @@ export default function Play() {
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold tracking-tight">Predictions &amp; leagues</h1>
         <span className="text-xs text-dim">Signed in as <b className="text-ink">{profile?.display_name || session.user.email}</b> · {total} points from {history.length} scored {history.length === 1 ? "race" : "races"}</span>
-        <button className="btn ml-auto" onClick={() => supabase!.auth.signOut()}>Sign out</button>
+        <span className="ml-auto flex gap-2"><Link href="/account" className="btn">Account</Link><button className="btn" onClick={() => supabase!.auth.signOut()}>Sign out</button></span>
       </div>
       {err && <State error={err} />}
 

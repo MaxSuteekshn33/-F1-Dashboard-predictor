@@ -33,9 +33,9 @@ table.grid-t tbody tr:hover td { background: rgba(255,255,255,.045); }
 table.grid-t td.r, table.grid-t th.r { text-align: right; }
 
 input[type=range] { accent-color: #e10600; height: 4px; }
-select, input[type=number], input[type=text] { background: rgba(255,255,255,.06); border: 1px solid var(--hair); border-radius: 10px; padding: 6px 10px; font-size: 12.5px;
+select, input[type=number], input[type=text], input[type=email], input[type=password] { background: rgba(255,255,255,.06); border: 1px solid var(--hair); border-radius: 10px; padding: 6px 10px; font-size: 12.5px;
   color: #f2f3f5; outline: none; transition: border-color .15s, background .15s; }
-select:hover, input[type=number]:hover, input[type=text]:hover { background: rgba(255,255,255,.09); }
+select:hover, input[type=number]:hover, input[type=text]:hover, input[type=email]:hover, input[type=password]:hover { background: rgba(255,255,255,.09); }
 select:focus, input:focus { border-color: rgba(255,255,255,.35); }
 select option { background: #14161b; color: #f2f3f5; }
 /* Buttons — one system for every call to action.

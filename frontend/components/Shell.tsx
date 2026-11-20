@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useActivity, useRace } from "@/lib/api";
 
 const NAV: [string, string, string][] = [
-  ["/live", "Live Race", "Upcoming"], ["/next", "Next Race", "Upcoming"], ["/play", "Predictions & Leagues", "Upcoming"],
+  ["/live", "Live Race", "Upcoming"], ["/next", "Next Race", "Upcoming"], ["/play", "Predictions & Leagues", "Upcoming"], ["/account", "Account", "Upcoming"],
   ["/", "Command Centre", "Race"], ["/telemetry", "Timing & Telemetry", "Race"], ["/predictor", "Race Predictor", "Race"],
   ["/strategy", "Pit & Tyre Strategy", "Decide"], ["/weather", "Weather Intelligence", "Decide"], ["/lab", "Simulation Lab", "Decide"], ["/advisor", "Recommendations", "Decide"],
   ["/history", "Race History", "Explore"], ["/analytics", "Drivers & Teams", "Explore"], ["/data", "Data & Models", "Explore"],
@@ -106,10 +106,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <select className="lg:hidden" value={path} onChange={(e) => (location.href = e.target.value)} aria-label="Section">
                 {NAV.map(([h, l]) => <option key={h} value={h}>{l}</option>)}
               </select>
-              {path === "/next" || path === "/play" ? (
+              {path === "/next" || path === "/play" || path === "/account" ? (
                 <div className="flex flex-1 flex-wrap items-center gap-3 py-1 text-[12.5px] text-dim">
-                  <span className="font-medium text-ink">{path === "/play" ? "Prediction game" : "Upcoming race"}</span>
-                  <span>{path === "/play" ? "Make picks, score points, compare with friends. The race and lap controls return on the other sections." : "Predictions and a pre-race strategy lab. The race and lap controls return on the other sections."}</span>
+                  <span className="font-medium text-ink">{path === "/play" ? "Prediction game" : path === "/account" ? "Your account" : "Upcoming race"}</span>
+                  <span>{path === "/account" ? "Sign in, reset a forgotten password, and manage your profile. The race and lap controls return on the other sections." : path === "/play" ? "Make picks, score points, compare with friends. The race and lap controls return on the other sections." : "Predictions and a pre-race strategy lab. The race and lap controls return on the other sections."}</span>
                 </div>
               ) : (<>
               <label className="flex min-w-0 items-center gap-2 text-[10px] font-medium uppercase tracking-[.12em] text-faint"><span className="hidden sm:inline">Race</span>
