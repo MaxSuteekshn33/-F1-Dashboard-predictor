@@ -9,7 +9,7 @@ export default {
       },
       fontFamily: {
         sans: ["Satoshi", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
-        display: ["Panchang", "Satoshi", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Clash Display", "Satoshi", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", "monospace"],
       },
     },

@@ -52,7 +52,7 @@ export default function CommandCentre() {
           </div>
           <div>
             <div className="flex items-baseline justify-between">
-              <div className="font-display text-[32px] font-bold leading-none [font-variant-numeric:tabular-nums]">{c.lap}<span className="text-[18px] text-faint"> / {c.total_laps ?? "—"}</span></div>
+              <div className="font-display text-[36px] font-semibold leading-none [font-variant-numeric:tabular-nums]">{c.lap}<span className="text-[18px] text-faint"> / {c.total_laps ?? "—"}</span></div>
               <div className="text-right text-[11.5px] text-dim">{c.total_laps ? `${c.total_laps - c.lap} laps to go` : "distance unknown"}{c.est_remaining_s ? <> · ~{fmtDur(c.est_remaining_s)}</> : null}</div>
             </div>
             <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]" role="progressbar" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Race distance completed">
