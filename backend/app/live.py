@@ -128,17 +128,25 @@ async def loop() -> None:
             use_stream = bool(cur) and stream.healthy()
             # REST: every few seconds when it is the only source; every 90 s as a reconciliation when the stream is healthy
             rest_due = time.time() - (state.get("last_rest_poll") or 0) >= (90 if use_stream else LIVE_POLL_SECONDS)
-            res = None
+            res, problem = None, None
+            if cur:         # set first: a failure below must not turn a session into a five-minute wait
+                delay = 1.5 if stream.state["running"] else LIVE_POLL_SECONDS
             if cur and stream.state["running"]:
                 stream.refresh_token_if_needed()
-                res = await asyncio.to_thread(_stream_tick)
-            if cur and rest_due:
-                rest = await asyncio.to_thread(_poll_once)
-                if rest and (rest["new_laps"] or rest["weather_changed"] or not res or res.get("quiet")):
-                    res = rest
-            state["last_poll"] = time.time(); state["polls"] += 1; state["last_error"] = None
+                try:
+                    res = await asyncio.to_thread(_stream_tick)
+                except Exception as e:      # one unreadable record must not stop the reconciliation below
+                    problem = f"stream tick: {type(e).__name__}: {e}"
+            if cur and (rest_due or (problem and time.time() - (state.get("last_rest_poll") or 0) >= LIVE_POLL_SECONDS)):
+                try:
+                    rest = await asyncio.to_thread(_poll_once)
+                    if rest and (rest["new_laps"] or rest["weather_changed"] or not res or res.get("quiet")):
+                        res = rest
+                except Exception as e:
+                    problem = (problem + " | " if problem else "") + f"REST poll: {type(e).__name__}: {e}"
+                    state["last_rest_poll"] = time.time()         # do not hammer the API while it is failing
+            state["last_poll"] = time.time(); state["polls"] += 1; state["last_error"] = problem
             if cur:
-                delay = 1.5 if stream.state["running"] else LIVE_POLL_SECONDS
                 if res and (res.get("new_laps") or res.get("weather_changed")):
                     await broadcast({"type": "update", **{k: v for k, v in res.items() if k != "stream"}})   # clients refetch
                 if res and res.get("weather_changed"):

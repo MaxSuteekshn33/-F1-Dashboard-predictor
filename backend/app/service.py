@@ -573,6 +573,8 @@ def lap_table(session_key: int, lap: int | None = None) -> dict:
         return {"available": False, "reason": "No lap data stored for this session."}
     k = laps[laps.end <= (st["T"] or 0) + 1e-6]
     stn = d["stints"].dropna(subset=["lap_start"]).sort_values("lap_start") if len(d["stints"]) else None
+    if stn is not None:     # a stint that has only just been announced has no start lap yet; the rest join on whole laps
+        stn = stn.assign(lap_start=stn.lap_start.astype(int))
     if stn is not None and len(k):
         k = pd.merge_asof(k.sort_values("lap_number"), stn[["driver_number", "lap_start", "compound", "stint_number"]], left_on="lap_number",
                           right_on="lap_start", by="driver_number", direction="backward")

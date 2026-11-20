@@ -123,3 +123,13 @@ def test_exact_search_matches_cp_sat_for_every_stop_count():
                         if fa:
                             assert abs(fa["rel_time"] - fb["rel_time"]) < 0.01
                             assert [x["compound"] for x in fb["plan"]] != [x["compound"] for x in a["plan"]]
+
+
+def test_missing_values_from_a_live_feed_do_not_break_whole_number_fields():
+    """A stint announced before its tyre age is known must not crash the race state (seen live in Las Vegas FP2)."""
+    from app import racestate as rs
+    assert rs._i(float("nan"), 0) == 0 and rs._i(None) is None and rs._i(np.float64(7.0)) == 7
+    n = 12                                                    # laps the car has completed
+    age = rs._i(float("nan"), 0) + max(0, n - rs._i(10.0, n + 1) + 1)
+    assert age == 3                                           # counted from the stint's first lap
+    assert rs._i(float("nan"), 0) + max(0, n - rs._i(float("nan"), n + 1) + 1) == 0

@@ -33,6 +33,22 @@ def f1db_race(sess: dict) -> dict | None:
     return best[1] if best else None
 
 
+IDENTITY = {"drivers": ("driver_number",), "laps": ("driver_number", "lap_number"), "stints": ("driver_number", "stint_number"),
+            "pit": ("driver_number", "date"), "position": ("driver_number", "date"), "weather": ("date",), "race_control": ("date",),
+            "session_result": ("driver_number",)}
+
+
+NUMERIC = {"laps": ("date_start", "lap_duration", "duration_sector_1", "duration_sector_2", "duration_sector_3", "is_pit_out_lap"),
+           "stints": ("lap_start", "lap_end", "tyre_age_at_start"), "pit": ("date", "pit_duration", "lap_number"),
+           "position": ("date", "position"), "race_control": ("date", "lap_number"),
+           "weather": ("date", "air_temperature", "track_temperature", "humidity", "pressure", "rainfall", "wind_speed", "wind_direction")}
+
+
+def _i(v, default=None):
+    """int(v), or `default` when the value is missing."""
+    return default if v is None or pd.isna(v) else int(v)
+
+
 @cached(ttl=8, maxsize=4)
 def load(session_key: int) -> dict:
     """All stored datasets for a session + derived lap end times and per-lap track status."""
@@ -42,14 +58,30 @@ def load(session_key: int) -> dict:
     d = {"session": sess}
     for t in TABLES:
         d[t] = db.df(f"SELECT * FROM of1_{t} WHERE session_key=:k", k=session_key) if db.has_table(f"of1_{t}") else pd.DataFrame()
-    laps = d["laps"].sort_values(["driver_number", "lap_number"]).reset_index(drop=True)
+        # A live feed delivers records before they are complete (a lap that has only started, a stint whose tyre
+        # age is not known yet). A record without the fields that identify it cannot be placed and is left out;
+        # everything else is kept, and each missing value is handled where it is used.
+        need = [c for c in IDENTITY.get(t, ()) if c in d[t].columns]
+        if need and len(d[t]):
+            d[t] = d[t].dropna(subset=need).reset_index(drop=True)
+            for c in need:          # whole numbers again once the incomplete rows are gone (joins need matching types)
+                if c != "date":
+                    d[t][c] = pd.to_numeric(d[t][c], errors="coerce").astype(int)
+        for c in NUMERIC.get(t, ()):        # a column that is empty so far must still behave as numbers
+            if c in d[t].columns:
+                d[t][c] = pd.to_numeric(d[t][c], errors="coerce")
+    laps = d["laps"].sort_values(["driver_number", "lap_number"]).reset_index(drop=True) if len(d["laps"]) else d["laps"]
+    if "is_pit_out_lap" in laps.columns:
+        laps["is_pit_out_lap"] = laps.is_pit_out_lap.fillna(0).astype(int)
+    if not len(laps):       # nothing usable yet: keep the derived columns so every reader sees the same shape
+        laps = laps.assign(end=pd.Series(dtype=float), is_pit_in_lap=pd.Series(dtype=int))
     if len(laps):
         nxt = laps.groupby("driver_number")["date_start"].shift(-1)
         same = laps.groupby("driver_number")["lap_number"].shift(-1) == laps.lap_number + 1
         laps["end"] = np.where(same & nxt.notna(), nxt, laps.date_start + laps.lap_duration)
         laps["lap_duration"] = laps.lap_duration.fillna(laps.end - laps.date_start)
         pit_in = laps.groupby("driver_number")["is_pit_out_lap"].shift(-1).fillna(0)
-        laps["is_pit_in_lap"] = pit_in.astype(int)
+        laps["is_pit_in_lap"] = pd.to_numeric(pit_in, errors="coerce").fillna(0).astype(int)
     d["laps"] = laps
     stamps = [float(laps.end.max())] if len(laps) and laps.end.notna().any() else []
     for t in ("position", "weather", "race_control", "pit"):
@@ -179,13 +211,14 @@ def _state(session_key: int, lap: int | None = None) -> dict:
     for dn in all_numbers:
         g = by_driver.get(dn)
         info = drivers.get(dn, {})
-        n = int(g.lap_number.max()) if g is not None else 0
+        n = _i(g.lap_number.max(), 0) if g is not None else 0
         last = g.iloc[-1] if g is not None else None
         st = stints[(stints.driver_number == dn) & (stints.lap_start <= n + 1)].sort_values("stint_number") if len(stints) else stints
         cur = st.iloc[-1] if len(st) else None
         age = None
         if cur is not None:
-            age = int((cur.tyre_age_at_start or 0) + max(0, n - cur.lap_start + 1))
+            # tyre age is unknown until the feed says what the set had done before; count from the stint start then
+            age = _i(cur.tyre_age_at_start, 0) + max(0, n - _i(cur.lap_start, n + 1) + 1)
         pcount = int((pits[(pits.driver_number == dn)].date <= T).sum()) if len(pits) else (max(0, len(st) - 1) if len(st) else 0)
         row = {
             "driver_number": int(dn), "code": info.get("name_acronym") or str(dn), "name": info.get("full_name") or str(dn),
@@ -197,7 +230,7 @@ def _state(session_key: int, lap: int | None = None) -> dict:
             "s2": _f(last.duration_sector_2) if last is not None else None,
             "s3": _f(last.duration_sector_3) if last is not None else None,
             "compound": cur.compound if cur is not None else None, "tyre_age": age,
-            "stint": int(cur.stint_number) if cur is not None else None, "pit_stops": pcount,
+            "stint": _i(cur.stint_number) if cur is not None else None, "pit_stops": pcount,
             "compounds_used": sorted(set(st.compound.dropna())) if len(st) else [],
             "grid": int(d["grid"][dn]) if dn in d["grid"] and not pd.isna(d["grid"][dn]) else None,
         }
@@ -241,10 +274,10 @@ def _state(session_key: int, lap: int | None = None) -> dict:
         x = wk.iloc[-1]
         recent = wk[wk.date >= T - 900]
         weather = {"t": float(x.date), "air_temperature": _f(x.air_temperature), "track_temperature": _f(x.track_temperature),
-                   "humidity": _f(x.humidity), "pressure": _f(x.pressure), "rainfall": int(x.rainfall or 0),
+                   "humidity": _f(x.humidity), "pressure": _f(x.pressure), "rainfall": _i(x.rainfall, 0),
                    "wind_speed": _f(x.wind_speed), "wind_direction": _f(x.wind_direction),
                    "rain_share_15min": round(float((recent.rainfall > 0).mean()), 2) if len(recent) else None,
-                   "track_temp_trend_15min": round(float(recent.track_temperature.iloc[-1] - recent.track_temperature.iloc[0]), 1) if len(recent) > 1 else None,
+                   "track_temp_trend_15min": (lambda a, b: None if pd.isna(a) or pd.isna(b) else round(float(b - a), 1))(recent.track_temperature.iloc[0], recent.track_temperature.iloc[-1]) if len(recent) > 1 else None,
                    "source": "OpenF1 /weather (track-side sensor, ~1/min)"}
     lead_recent = laps[(laps.driver_number == leader["driver_number"]) & (laps.lap_number <= lap)].lap_duration.tail(3).median() if leader else None
     remaining = (d["total_laps"] - lap) if d["total_laps"] else None
