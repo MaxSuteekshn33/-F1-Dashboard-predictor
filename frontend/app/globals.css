@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------- type
-   Satoshi (interface, body, numbers) and Clash Display (page titles, headline numbers), both from
+   Satoshi (interface, body, numbers) and Cabinet Grotesk (page titles, headline numbers), both from
    Fontshare under the ITF Free Font License, bundled in /public/fonts so they load with the page. */
 @font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
 @font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-700.woff2") format("woff2"); font-weight: 600 700; font-display: swap; }
 @font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-900.woff2") format("woff2"); font-weight: 800 900; font-display: swap; }
-@font-face { font-family: "Clash Display"; src: url("/fonts/ClashDisplay-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
-@font-face { font-family: "Clash Display"; src: url("/fonts/ClashDisplay-600.woff2") format("woff2"); font-weight: 600; font-display: swap; }
-@font-face { font-family: "Clash Display"; src: url("/fonts/ClashDisplay-700.woff2") format("woff2"); font-weight: 700 900; font-display: swap; }
+@font-face { font-family: "Cabinet Grotesk"; src: url("/fonts/CabinetGrotesk-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Cabinet Grotesk"; src: url("/fonts/CabinetGrotesk-700.woff2") format("woff2"); font-weight: 600 700; font-display: swap; }
+@font-face { font-family: "Cabinet Grotesk"; src: url("/fonts/CabinetGrotesk-800.woff2") format("woff2"); font-weight: 800 900; font-display: swap; }
 
 /* ---------------------------------------------------------------- palette
    Racing red, carbon, grey, white and a single blue. Surfaces are solid: no blur, no glow behind content. */
@@ -22,7 +22,7 @@
   --bg: #0e0e15; --carbon: #15151e; --card: #1a1a24; --card-2: #22222d; --card-3: #2a2a36;
   --hair: rgba(255,255,255,.08); --hair-2: rgba(255,255,255,.16);
   --ink: #ffffff; --dim: #bcbcc8; --faint: #8f8f9d;
-  --display: "Clash Display", "Satoshi", ui-sans-serif, system-ui, sans-serif;
+  --display: "Cabinet Grotesk", "Satoshi", ui-sans-serif, system-ui, sans-serif;
 }
 html { scroll-behavior: smooth; scroll-padding-top: 84px; background: var(--bg); }
 html, body { color: var(--ink); }
@@ -36,7 +36,7 @@ body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-even
 /* the red line along the top of every page */
 body::after { content: ""; position: fixed; inset: 0 0 auto 0; height: 3px; z-index: 60; pointer-events: none; background: linear-gradient(90deg, var(--red) 0%, var(--red-hi) 55%, var(--red) 100%); }
 
-h1 { font-family: var(--display); font-weight: 600; letter-spacing: 0; line-height: 1.12; font-size: clamp(22px, 2.7vw, 30px) !important; }
+h1 { font-family: var(--display); font-weight: 700; letter-spacing: 0; line-height: 1.12; font-size: clamp(22px, 2.7vw, 30px) !important; }
 .display { font-family: var(--display); }
 .eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--red-hi); }
 
