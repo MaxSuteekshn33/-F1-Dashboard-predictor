@@ -3,6 +3,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useActivity, useRace } from "@/lib/api";
+import { Flag, Gauge, Radio, Timer, Trophy } from "lucide-react";
+import GradientMenu, { GRADIENTS } from "@/components/ui/gradient-menu";
+
+// The five sections people reach for most, as the phone's bottom dock (and the quick row on the Command Centre).
+export const DOCK = [
+  { title: "Live", href: "/live", icon: <Radio />, ...GRADIENTS.red },
+  { title: "Next race", href: "/next", icon: <Flag />, ...GRADIENTS.blue },
+  { title: "Command", href: "/", icon: <Gauge />, ...GRADIENTS.carbon },
+  { title: "Strategy", href: "/strategy", icon: <Timer />, ...GRADIENTS.redBlue },
+  { title: "Picks", href: "/play", icon: <Trophy />, ...GRADIENTS.white },
+];
 
 const NAV: [string, string, string][] = [
   ["/live", "Live Race", "Upcoming"], ["/next", "Next Race", "Upcoming"], ["/play", "Predictions & Leagues", "Upcoming"], ["/account", "Account", "Upcoming"],
@@ -17,8 +28,8 @@ const STATUS: Record<string, [string, string]> = {
 };
 
 function Pill({ colour, children, title }: { colour: string; children: React.ReactNode; title?: string }) {
-  return <span title={title} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium" style={{ color: colour }}>
-    <span className="h-1.5 w-1.5 rounded-full" style={{ background: colour, boxShadow: `0 0 8px ${colour}` }} />{children}</span>;
+  return <span title={title} className="inline-flex items-center gap-1.5 border border-white/10 bg-[#22222d] py-1 pl-2 pr-2.5 text-[11px] font-bold uppercase tracking-[.08em]" style={{ color: colour, borderRadius: "2px 8px 2px 2px" }}>
+    <span className="h-3 w-[3px] -skew-x-12" style={{ background: colour }} />{children}</span>;
 }
 
 export default function Shell({ children }: { children: React.ReactNode }) {
@@ -69,29 +80,33 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <a href="#main" className="btn primary skip-link">Skip to content</a>
-      <aside className="sticky top-0 hidden h-screen w-[236px] shrink-0 p-3 lg:block">
-        <div className="glass-strong flex h-full flex-col rounded-3xl">
-          <div className="px-5 pb-4 pt-5">
-            <div className="flex items-center gap-2.5"><span className="h-5 w-1.5 -skew-x-12 rounded-sm bg-f1 shadow-[0_0_14px_rgba(225,6,0,.8)]" /><span className="text-[16px] font-bold tracking-[.2em]">APEX</span></div>
-            <div className="mt-1 text-[10px] uppercase tracking-[.22em] text-faint">F1 Intelligence</div>
-          </div>
-          <nav className="flex-1 space-y-4 overflow-y-auto px-3 pb-3">
+      <aside className="sticky top-0 hidden h-screen w-[244px] shrink-0 border-r border-white/[0.07] bg-[#0b0b11] pt-[3px] lg:block">
+        <div className="flex h-full flex-col">
+          <Link href="/" className="block px-6 pb-5 pt-6" aria-label="APEX F1 Intelligence — Command Centre">
+            <div className="flex items-center gap-3">
+              <span className="flex gap-[3px]" aria-hidden><span className="h-6 w-[5px] -skew-x-[20deg] bg-f1" /><span className="h-6 w-[5px] -skew-x-[20deg] bg-f1/70" /><span className="h-6 w-[5px] -skew-x-[20deg] bg-f1/40" /></span>
+              <span className="font-display text-[19px] font-extrabold tracking-[.06em]">APEX</span>
+            </div>
+            <div className="mt-1.5 text-[10px] font-bold uppercase tracking-[.26em] text-faint">F1 Intelligence</div>
+          </Link>
+          <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-3">
             {groups.map((g) => (
               <div key={g}>
-                <div className="px-3 pb-1.5 text-[9.5px] font-semibold uppercase tracking-[.18em] text-faint">{g}</div>
+                <div className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[.2em] text-faint">{g}</div>
                 {NAV.filter((n) => n[2] === g).map(([href, label]) => {
                   const on = path === href;
                   return (
                     <Link key={href} href={href} aria-current={on ? "page" : undefined}
-                      className={`group relative flex items-center rounded-xl px-3 py-2 text-[13px] transition-all duration-150 ${on ? "bg-white/[0.10] font-medium text-ink shadow-[inset_0_1px_0_rgba(255,255,255,.08)]" : "text-dim hover:bg-white/[0.05] hover:text-ink"}`}>
-                      <span className={`mr-2.5 h-1.5 w-1.5 rounded-full transition-all ${on ? "bg-f1 shadow-[0_0_8px_rgba(225,6,0,.9)]" : "bg-white/15 group-hover:bg-white/40"}`} />{label}
+                      className={`group relative flex items-center px-3 py-[9px] text-[13.5px] transition-colors duration-150 ${on ? "bg-white/[0.07] font-bold text-ink" : "font-medium text-dim hover:bg-white/[0.04] hover:text-ink"}`}
+                      style={{ borderRadius: "2px 10px 2px 2px" }}>
+                      <span className={`absolute inset-y-1.5 left-0 w-[3px] transition-colors ${on ? "bg-f1" : "bg-transparent group-hover:bg-white/25"}`} />{label}
                     </Link>
                   );
                 })}
               </div>
             ))}
           </nav>
-          <div className="border-t border-line px-5 py-3.5 text-[10.5px] leading-relaxed text-faint">
+          <div className="border-t border-white/[0.07] px-6 py-4 text-[10.5px] leading-relaxed text-faint">
             <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full" style={{ background: r.wsState === "open" ? "#2fbf71" : "#7c8290" }} />Feed {r.wsState === "open" ? "connected" : r.wsState}</span>
             <div className="mt-0.5">OpenF1 · F1DB · Jolpica · Open-Meteo</div>
           </div>
@@ -100,10 +115,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
       <div className="min-w-0 flex-1">
         <div aria-hidden className={`pointer-events-none fixed inset-x-0 top-0 z-50 h-[2px] overflow-hidden transition-opacity duration-300 ${working ? "opacity-100" : "opacity-0"}`}><div className="activity-bar h-full w-1/3 bg-gradient-to-r from-transparent via-[#ff3b30] to-transparent" /></div>
-        <header className="sticky top-0 z-20 px-3 pt-3 lg:pl-0 lg:pr-4">
-          <div className="glass-strong rounded-2xl">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 px-4 py-2.5">
-              <select className="lg:hidden" value={path} onChange={(e) => (location.href = e.target.value)} aria-label="Section">
+        <header className="relative top-0 z-20 pt-[3px] lg:sticky">
+          <div className="border-b border-white/[0.08] bg-[#15151e]/[.97]">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 px-3 py-2.5 sm:px-5 lg:px-7">
+              <select className="font-bold lg:hidden" value={path} onChange={(e) => (location.href = e.target.value)} aria-label="Section">
                 {NAV.map(([h, l]) => <option key={h} value={h}>{l}</option>)}
               </select>
               {path === "/next" || path === "/play" || path === "/account" ? (
@@ -116,11 +131,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 <select value={r.sessionKey ?? ""} onChange={(e) => r.setSessionKey(Number(e.target.value))} aria-label="Race" className="max-w-[210px] font-medium normal-case tracking-normal">
                   {r.sessions.map((s) => <option key={s.session_key} value={s.session_key}>{s.year} · {s.location}</option>)}
                 </select></label>
-              <div className="flex min-w-0 flex-1 basis-full items-center gap-2 rounded-full border border-line bg-white/[0.04] py-1 pl-3.5 pr-1 sm:basis-[340px] xl:max-w-[520px]">
+              <div className="flex min-w-0 flex-1 basis-full items-center gap-2 border border-white/10 bg-[#1a1a24] py-1 pl-3.5 pr-1 sm:basis-[340px] xl:max-w-[520px]" style={{ borderRadius: "2px 12px 2px 2px" }}>
                 <span className="shrink-0 text-[10px] font-medium uppercase tracking-[.12em] text-faint">Lap</span>
                 <input type="range" min={1} max={Math.max(1, maxLap)} value={shownLap} onChange={(e) => onSlide(Number(e.target.value))}
                   onPointerUp={() => { if (drag !== null) commit(drag); }} className="min-w-0 flex-1" aria-label="As-of lap" aria-valuetext={`Lap ${shownLap} of ${cmd?.total_laps ?? maxLap}`} />
-                <span className="num w-[52px] shrink-0 text-right text-[13px] font-semibold">{shownLap}<span className="text-faint">/{cmd?.total_laps ?? "—"}</span></span>
+                <span className="num w-[56px] shrink-0 text-right text-[13px] font-bold">{shownLap}<span className="text-faint">/{cmd?.total_laps ?? "—"}</span></span>
                 <button className="btn shrink-0 !min-h-[30px] !px-3 !py-1" aria-pressed={playing} onClick={() => { if (!playing && lap >= maxLap) r.setLap(1); setPlaying(!playing); }} title="Replay the race lap by lap">{playing ? "Pause" : "▶ Replay"}</button>
                 {replaying && <button className="btn quiet shrink-0 !min-h-[30px] !px-3 !py-1" onClick={() => { setPlaying(false); setDrag(null); r.setLap(null); }} title="Jump to the newest lap">Latest</button>}
               </div>
@@ -141,10 +156,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               </div>
               </>)}
             </div>
-            {r.alert && <div className="flex items-center gap-3 rounded-b-2xl border-t border-warn/30 bg-warn/10 px-4 py-2 text-xs text-warn">{r.alert}<button className="btn ml-auto !py-1" onClick={r.clearAlert}>Dismiss</button></div>}
+            {r.alert && <div className="flex items-center gap-3 border-t border-warn/30 bg-warn/10 px-4 py-2 text-xs text-warn">{r.alert}<button className="btn ml-auto !py-1" onClick={r.clearAlert}>Dismiss</button></div>}
           </div>
         </header>
-        <main id="main" key={path} className="page-in mx-auto max-w-[1560px] px-3 pb-10 pt-5 lg:pl-0 lg:pr-4">{children}</main>
+        <main id="main" key={path} className="page-in mx-auto max-w-[1560px] px-3 pb-28 pt-6 sm:px-5 lg:px-7 lg:pb-12">{children}</main>
+        {/* phone and tablet: the five main sections as a gradient dock */}
+        <nav aria-label="Main sections" className="fixed inset-x-0 bottom-0 z-30 flex justify-center border-t border-white/10 bg-[#0b0b11]/[.96] px-2 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 lg:hidden">
+          <GradientMenu items={DOCK} active={path} size="sm" />
+        </nav>
       </div>
     </div>
   );

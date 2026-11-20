@@ -38,17 +38,17 @@ const TAG_HELP: Record<string, string> = { OBSERVED: "Recorded data from a provi
 /** Provenance label: where a number comes from. Quiet by design — a coloured dot and a small word. */
 export function Tag({ kind, children }: { kind: string; children?: React.ReactNode }) {
   const c = TAGS[kind] || TAGS.UNAVAILABLE;
-  return <span className="inline-flex items-center gap-1 whitespace-nowrap text-[9.5px] font-medium uppercase tracking-[.1em]" style={{ color: c }} title={TAG_HELP[kind] || ""}>
-    <span className="h-1.5 w-1.5 rounded-full" style={{ background: c }} />{children || kind}</span>;
+  return <span className="inline-flex items-center gap-1 whitespace-nowrap text-[9.5px] font-bold uppercase tracking-[.12em]" style={{ color: c }} title={TAG_HELP[kind] || ""}>
+    <span className="h-2 w-[3px] -skew-x-12" style={{ background: c }} />{children || kind}</span>;
 }
 
 export function Panel({ title, tags, right, children, className = "", note, pad = true }:
   { title?: React.ReactNode; tags?: string[]; right?: React.ReactNode; children: React.ReactNode; className?: string; note?: React.ReactNode; pad?: boolean }) {
   return (
-    <section className={`glass overflow-hidden rounded-2xl ${className}`}>
+    <section className={`glass overflow-hidden ${className}`}>
       {(title || right) && (
         <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 pb-3 pt-4">
-          <h2 className="text-[13px] font-semibold tracking-tight text-ink">{title}</h2>
+          <h2 className="text-[14px] font-bold tracking-[-.005em] text-ink">{title}</h2>
           {tags?.map((t) => <Tag key={t} kind={t} />)}
           <div className="ml-auto flex flex-wrap items-center gap-2 text-xs text-dim">{right}</div>
         </header>
@@ -66,10 +66,10 @@ export function Panel({ title, tags, right, children, className = "", note, pad 
 
 export function Stat({ label, value, sub, tag, accent }: { label: string; value: React.ReactNode; sub?: React.ReactNode; tag?: string; accent?: string }) {
   return (
-    <div className="glass rounded-2xl px-4 py-3.5">
-      <div className="flex items-center justify-between gap-2 text-[10.5px] font-medium uppercase tracking-[.09em] text-faint"><span className="truncate">{label}</span>
-        {tag && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: TAGS[tag] || TAGS.UNAVAILABLE }} title={`${tag} — ${TAG_HELP[tag] || ""}`} />}</div>
-      <div className="num mt-1.5 text-[22px] font-semibold leading-none tracking-tight" style={accent ? { color: accent } : undefined}>{value}</div>
+    <div className="glass px-4 py-3.5">
+      <div className="flex items-center justify-between gap-2 text-[10.5px] font-bold uppercase tracking-[.12em] text-faint"><span className="truncate">{label}</span>
+        {tag && <span className="h-2.5 w-[3px] shrink-0 -skew-x-12" style={{ background: TAGS[tag] || TAGS.UNAVAILABLE }} title={`${tag} — ${TAG_HELP[tag] || ""}`} />}</div>
+      <div className="mt-2 font-display text-[19px] font-bold leading-none tracking-[-.01em] [font-variant-numeric:tabular-nums]" style={accent ? { color: accent } : undefined}>{value}</div>
       {sub && <div className="mt-1.5 truncate text-[11px] text-dim" title={typeof sub === "string" ? sub : undefined}>{sub}</div>}
     </div>
   );
@@ -79,11 +79,11 @@ export function Stat({ label, value, sub, tag, accent }: { label: string; value:
 export function Tabs({ tabs, value, onChange }: { tabs: [string, string][]; value: string; onChange: (v: string) => void }) {
   const move = (d: number) => { const i = tabs.findIndex((t) => t[0] === value); onChange(tabs[(i + d + tabs.length) % tabs.length][0]); };
   return (
-    <div role="tablist" className="glass inline-flex max-w-full gap-1 overflow-x-auto rounded-full p-1"
+    <div role="tablist" className="inline-flex max-w-full gap-5 overflow-x-auto border-b border-white/10"
       onKeyDown={(e) => { if (e.key === "ArrowRight") move(1); if (e.key === "ArrowLeft") move(-1); }}>
       {tabs.map(([k, label]) => (
         <button key={k} role="tab" aria-selected={value === k} tabIndex={value === k ? 0 : -1} onClick={() => onChange(k)}
-          className={`whitespace-nowrap rounded-full px-4 py-1.5 text-[12.5px] font-medium transition-all duration-200 ${value === k ? "bg-white/[0.14] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,.12)]" : "text-dim hover:text-ink"}`}>{label}</button>
+          className={`-mb-px whitespace-nowrap border-b-[3px] px-0.5 pb-2 pt-1 text-[13px] font-bold transition-colors duration-200 ${value === k ? "border-f1 text-ink" : "border-transparent text-faint hover:border-white/30 hover:text-ink"}`}>{label}</button>
       ))}
     </div>
   );
@@ -103,8 +103,8 @@ export function Tyre({ compound, age }: { compound?: string | null; age?: number
 export function Driver({ code, colour, name }: { code?: string | null; colour?: string | null; name?: string }) {
   return (
     <span className="inline-flex items-center gap-2" title={name}>
-      <span className="inline-block h-3.5 w-[3px] rounded-full" style={{ background: teamColour(colour) }} />
-      <span className="font-semibold tracking-wide">{code || "—"}</span>
+      <span className="inline-block h-4 w-[4px] -skew-x-12" style={{ background: teamColour(colour) }} />
+      <span className="font-bold tracking-[.04em]">{code || "—"}</span>
     </span>
   );
 }
@@ -112,15 +112,15 @@ export function Driver({ code, colour, name }: { code?: string | null; colour?: 
 export function Bar({ value, max = 1, colour = SERIES[0], label }: { value: number; max?: number; colour?: string; label?: string }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="h-1.5 flex-1 rounded-full bg-white/[0.08]"><div className="h-1.5 rounded-full" style={{ width: `${Math.max(0, Math.min(1, value / max)) * 100}%`, background: colour }} /></div>
+      <div className="h-1.5 flex-1 bg-white/[0.08]"><div className="h-1.5" style={{ width: `${Math.max(0, Math.min(1, value / max)) * 100}%`, background: colour }} /></div>
       {label && <span className="num w-12 text-right text-[11px]">{label}</span>}
     </div>
   );
 }
 
 export function State({ loading, error, empty, children }: { loading?: boolean; error?: string | null; empty?: string | null; children?: React.ReactNode }) {
-  if (error) return <div className="rounded-xl border border-bad/30 bg-bad/10 px-4 py-3 text-xs text-[#ffb3ae]"><b>Unavailable.</b> {error}</div>;
-  if (empty) return <div className="rounded-xl border border-line bg-white/[0.04] px-4 py-3 text-xs text-dim">{empty}</div>;
+  if (error) return <div className="border-l-[3px] border-bad bg-bad/10 px-4 py-3 text-xs text-[#ffb3ae]"><b>Unavailable.</b> {error}</div>;
+  if (empty) return <div className="border-l-[3px] border-white/25 bg-white/[0.04] px-4 py-3 text-xs text-dim">{empty}</div>;
   if (loading && !children) return (
     <div className="space-y-2.5 py-3" aria-label="Loading" role="status">
       <div className="skeleton h-4 w-1/3" /><div className="skeleton h-4 w-full" /><div className="skeleton h-4 w-5/6" /><div className="skeleton h-4 w-2/3" />
@@ -132,7 +132,7 @@ export function Notes({ items, title = "Limitations" }: { items?: (string | null
   const list = (items || []).filter(Boolean) as string[];
   if (!list.length) return null;
   return (
-    <details className="more glass rounded-2xl px-5 py-3">
+    <details className="more glass px-5 py-3">
       <summary>{title} <span className="num text-faint">({list.length})</span></summary>
       <ul className="space-y-1 pb-1 pt-2.5 text-[11.5px] leading-relaxed text-dim">{list.map((x, i) => <li key={i} className="flex gap-2"><span className="text-faint">–</span><span>{x}</span></li>)}</ul>
     </details>
@@ -142,7 +142,7 @@ export function Notes({ items, title = "Limitations" }: { items?: (string | null
 export function ChartTip({ active, payload, label, fmt, title }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="glass-strong rounded-xl px-3 py-2 text-[11px]">
+    <div className="glass-strong px-3 py-2 text-[11px]">
       <div className="mb-0.5 text-faint">{title ? title(label) : label}</div>
       {payload.map((p: any, i: number) => (
         <div key={i} className="flex items-center gap-2">

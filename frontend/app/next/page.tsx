@@ -41,16 +41,16 @@ export default function NextRace() {
   const fsum = fc?.rows?.length ? { maxProb: Math.max(...fc.rows.map((r: any) => r.precip_prob ?? 0)), mm: fc.rows.reduce((a: number, r: any) => a + (r.precip_mm_15 || 0), 0), temp: fc.rows[Math.floor(fc.rows.length / 2)]?.temp } : null;
   return (
     <div className="space-y-5">
-      <section className="glass overflow-hidden rounded-3xl">
+      <section className="glass card-hero overflow-hidden">
         <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-end">
           <div>
-            <div className="text-[10.5px] font-medium uppercase tracking-[.18em] text-faint">Next race · {race.year} round {race.round}</div>
+            <div className="eyebrow">Next race · {race.year} round {race.round}</div>
             <h1 className="mt-1.5 text-[30px] font-semibold leading-tight tracking-tight">{race.gp_name}</h1>
             <div className="mt-1 text-[13px] text-dim">{c.full_name} · {c.place_name} · {c.laps} laps · {num(c.course_length, 3)} km · {String(c.circuit_type).toLowerCase()} circuit</div>
             <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px]">
-              <span className="rounded-full border border-line bg-white/[0.05] px-3 py-1.5 text-dim">Lights out <b className="text-ink">{dt(d.start)}</b></span>
-              <span className="rounded-full border border-line bg-white/[0.05] px-3 py-1.5 text-dim">{d.grid_known ? <>Grid: <b className="text-ink">set</b> — post-qualifying model</> : <>Qualifying <b className="text-ink">{c.qualifying_date ?? "—"}</b> — predictions update once the grid is known</>}</span>
-              {c.sprint_race_date && <span className="rounded-full border border-line bg-white/[0.05] px-3 py-1.5 text-dim">Sprint weekend</span>}
+              <span className="border border-white/10 bg-[#22222d] [border-radius:2px_10px_2px_2px] px-3 py-1.5 text-dim">Lights out <b className="text-ink">{dt(d.start)}</b></span>
+              <span className="border border-white/10 bg-[#22222d] [border-radius:2px_10px_2px_2px] px-3 py-1.5 text-dim">{d.grid_known ? <>Grid: <b className="text-ink">set</b> — post-qualifying model</> : <>Qualifying <b className="text-ink">{c.qualifying_date ?? "—"}</b> — predictions update once the grid is known</>}</span>
+              {c.sprint_race_date && <span className="border border-white/10 bg-[#22222d] [border-radius:2px_10px_2px_2px] px-3 py-1.5 text-dim">Sprint weekend</span>}
             </div>
           </div>
           <div className="lg:text-right">

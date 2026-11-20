@@ -1,4 +1,6 @@
 "use client";
+import GradientMenu from "@/components/ui/gradient-menu";
+import { DOCK } from "@/components/Shell";
 import { useMemo, useState } from "react";
 import { useApi, useRace } from "@/lib/api";
 import { Driver, Notes, Panel, Stat, State, Tag, Tyre, fmtDur, fmtLap, num, pct, dt } from "@/components/ui";
@@ -38,23 +40,23 @@ export default function CommandCentre() {
   return (
     <div className="space-y-5">
       {/* hero: what race, how far in, who leads */}
-      <section className="glass overflow-hidden rounded-3xl">
+      <section className="glass card-hero overflow-hidden">
         <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:items-end">
           <div>
-            <div className="text-[10.5px] font-medium uppercase tracking-[.18em] text-faint">{c.session.year} · Round {c.f1db?.round ?? "—"} · {c.session.session_name}</div>
+            <div className="eyebrow">{c.session.year} · Round {c.f1db?.round ?? "—"} · {c.session.session_name}</div>
             <h1 className="mt-1.5 text-[30px] font-semibold leading-tight tracking-tight">{c.title}</h1>
             <div className="mt-1 text-[13px] text-dim">{c.circuit} · {c.session.location}, {c.session.country_name}</div>
-            {leader && <div className="mt-4 inline-flex items-center gap-3 rounded-full border border-line bg-white/[0.05] py-1.5 pl-3 pr-4 text-[12.5px]">
+            {leader && <div className="mt-4 inline-flex items-center gap-3 border border-white/10 bg-[#22222d] [border-radius:2px_10px_2px_2px] py-1.5 pl-3 pr-4 text-[12.5px]">
               <span className="text-faint">{c.track_status === "FINISHED" ? "Winner" : "Leader"}</span><Driver code={leader.code} colour={leader.team_colour} name={leader.name} />
               <span className="text-dim">{leader.team}</span><Tyre compound={leader.compound} age={leader.tyre_age} /></div>}
           </div>
           <div>
             <div className="flex items-baseline justify-between">
-              <div className="num text-[34px] font-semibold leading-none tracking-tight">{c.lap}<span className="text-[18px] text-faint"> / {c.total_laps ?? "—"}</span></div>
+              <div className="font-display text-[32px] font-bold leading-none [font-variant-numeric:tabular-nums]">{c.lap}<span className="text-[18px] text-faint"> / {c.total_laps ?? "—"}</span></div>
               <div className="text-right text-[11.5px] text-dim">{c.total_laps ? `${c.total_laps - c.lap} laps to go` : "distance unknown"}{c.est_remaining_s ? <> · ~{fmtDur(c.est_remaining_s)}</> : null}</div>
             </div>
             <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]" role="progressbar" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Race distance completed">
-              <div className="h-full rounded-full bg-gradient-to-r from-[#ff3b30] to-[#e10600] shadow-[0_0_12px_rgba(225,6,0,.7)] transition-[width] duration-500" style={{ width: `${progress * 100}%` }} /></div>
+              <div className="h-full rounded-full bg-gradient-to-r from-[#ff3a22] to-[#e10600] transition-[width] duration-500" style={{ width: `${progress * 100}%` }} /></div>
             <div className="num mt-4 grid grid-cols-3 gap-4 text-[12px]">
               <div><div className="text-[10px] font-medium uppercase tracking-[.1em] text-faint">Fastest lap</div><div className="mt-1 text-[15px] font-semibold text-[#c9a7ff]">{fmtLap(c.fastest_lap?.time)}</div><div className="text-dim">{c.fastest_lap ? `${c.fastest_lap.code} · lap ${c.fastest_lap.lap}` : "—"}</div></div>
               <div><div className="text-[10px] font-medium uppercase tracking-[.1em] text-faint">Neutralisations</div><div className="mt-1 text-[15px] font-semibold">{c.neutralisations.SC + c.neutralisations.VSC + c.neutralisations.RED}</div><div className="text-dim">{c.neutralisations.SC} SC · {c.neutralisations.VSC} VSC · {c.neutralisations.RED} red</div></div>
@@ -63,6 +65,11 @@ export default function CommandCentre() {
           </div>
         </div>
       </section>
+      {/* quick access (desktop; phones have the same five in the bottom dock) */}
+      <div className="hidden items-center gap-5 lg:flex">
+        <span className="eyebrow">Jump to</span>
+        <GradientMenu items={DOCK} active="/" />
+      </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Track / air" tag="OBSERVED" value={w ? <>{num(w.track_temperature)}°<span className="text-faint"> / </span>{num(w.air_temperature)}°</> : "—"} sub={w ? `Humidity ${num(w.humidity, 0)}%` : "No track weather"} />

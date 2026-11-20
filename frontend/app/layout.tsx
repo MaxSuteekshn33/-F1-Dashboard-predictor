@@ -9,9 +9,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+        <link rel="preload" href="/fonts/Satoshi-500.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/fonts/Panchang-700.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <meta name="theme-color" content="#15151e" />
       </head>
       <body className="font-sans text-[13.5px]">
         <RaceProvider><Shell>{children}</Shell></RaceProvider>

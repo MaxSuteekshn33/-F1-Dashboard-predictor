@@ -54,8 +54,8 @@ export default function LiveRace() {
     const nx = live.next_session;
     return (
       <div className="space-y-5">
-        <section className="glass overflow-hidden rounded-3xl px-6 py-6">
-          <div className="text-[10.5px] font-medium uppercase tracking-[.18em] text-faint">Live race</div>
+        <section className="glass card-hero overflow-hidden px-6 py-6">
+          <div className="eyebrow">Live race</div>
           <h1 className="mt-1.5 text-[28px] font-semibold leading-tight tracking-tight">No race is live right now</h1>
           {nx ? <p className="mt-2 text-[13px] text-dim">Next session: <b className="text-ink">{nx.location} · {nx.session_name}</b>, {dt(nx.date_start)} — starts in <b className="text-ink"><Countdown to={nx.date_start} /></b>.</p>
             : <p className="mt-2 text-[13px] text-dim">No upcoming session is listed yet.</p>}
@@ -84,7 +84,7 @@ export default function LiveRace() {
   const colour = mode === "LIVE" ? "#2fbf71" : mode === "REHEARSAL" ? "#c9a7ff" : "#e0a100";
   return (
     <div className="space-y-5">
-      <section className="glass overflow-hidden rounded-3xl" style={{ borderColor: `${colour}55` }}>
+      <section className="glass card-hero overflow-hidden" style={{ borderColor: `${colour}55` }}>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-6 py-5">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.16em]" style={{ color: colour }}>
