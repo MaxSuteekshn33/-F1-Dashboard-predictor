@@ -145,6 +145,106 @@ def _feature_frame(extra: pd.DataFrame | None) -> pd.DataFrame:
     return f
 
 
+def _entrant_keys(ent: pd.DataFrame) -> tuple[dict, dict]:
+    """Car number and three-letter code -> F1DB driver id, among this race's entrants only (codes repeat across eras)."""
+    ids = list(ent.driver_id)
+    if not ids:
+        return {}, {}
+    rows = db.q("SELECT id, abbreviation, permanent_number FROM f1db_drivers WHERE id IN (%s)" % ",".join(f":d{i}" for i in range(len(ids))),
+                **{f"d{i}": d for i, d in enumerate(ids)})
+    by_num = {int(r["permanent_number"]): r["id"] for r in rows if r["permanent_number"] is not None and not pd.isna(r["permanent_number"])}
+    by_code = {r["abbreviation"]: r["id"] for r in rows if r["abbreviation"]}
+    return by_num, by_code
+
+
+def grid_override(race_id: int) -> dict | None:
+    """An admin-entered grid. Kept in the local database and, when the result store reaches Supabase, there too,
+    so a restart or a deploy on race morning does not lose it."""
+    if db.has_table("grid_override"):
+        r = db.q("SELECT codes, note, ts FROM grid_override WHERE race_id=:r", r=race_id)
+        if r:
+            return {"codes": json.loads(r[0]["codes"]), "note": r[0]["note"], "ts": r[0]["ts"]} if r[0]["codes"] else None
+    v = store._remote_get(f"grid_override:{race_id}") if store._remote_on() else None
+    if isinstance(v, dict) and v.get("codes"):
+        db.execute("CREATE TABLE IF NOT EXISTS grid_override (race_id INTEGER PRIMARY KEY, codes TEXT, note TEXT, ts REAL)")
+        db.execute("INSERT OR REPLACE INTO grid_override (race_id, codes, note, ts) VALUES (:r, :c, :n, :t)", r=race_id, c=json.dumps(v["codes"]), n=v.get("note", ""), t=v.get("ts", 0))
+        return v
+    return None
+
+
+def set_grid_override(race_id: int, codes: list[str] | None, note: str = "") -> None:
+    db.execute("CREATE TABLE IF NOT EXISTS grid_override (race_id INTEGER PRIMARY KEY, codes TEXT, note TEXT, ts REAL)")
+    db.execute("DELETE FROM grid_override WHERE race_id=:r", r=race_id)
+    # an empty row records a removal, so an older copy in Supabase is not picked up again
+    db.execute("INSERT INTO grid_override (race_id, codes, note, ts) VALUES (:r, :c, :n, :t)", r=race_id, c=json.dumps(codes) if codes else "", n=note, t=time.time())
+    if store._remote_on():
+        store._remote_put(f"grid_override:{race_id}", "grid_override", {"codes": codes or [], "note": note, "ts": time.time()})
+    prerace_prediction.clear()
+
+
+def _official_grid(race: dict) -> list[dict]:
+    """OpenF1's starting grid for the race session (penalties applied), once it is published."""
+    if not db.has_table("of1_sessions"):
+        return []
+    day = str(race["date"])
+    s = db.q("SELECT session_key FROM of1_sessions WHERE session_name='Race' AND year=:y AND date(date_start, 'unixepoch') BETWEEN date(:d, '-1 day') AND date(:d, '+1 day')",
+             y=race["year"], d=day)
+    if not s:
+        return []
+    try:
+        raw = openf1.get("starting_grid", f"session_key={s[0]['session_key']}", ttl=600, empty_404=True)
+    except SourceError:
+        return []
+    return [x for x in raw if isinstance(x, dict) and x.get("position")] if isinstance(raw, list) else []
+
+
+def _apply_grid(race: dict, ent: pd.DataFrame) -> tuple[pd.DataFrame, str | None, list[str]]:
+    """Grid and qualifying for the upcoming race, best source first:
+       1. a grid entered by the site admin (to apply penalties as soon as they are announced);
+       2. OpenF1's official starting grid (penalties applied), once published;
+       3. Jolpica's qualifying classification (no penalties).
+    Qualifying position and time come from Jolpica whenever it has them."""
+    notes, source = [], None
+    by_num, by_code = _entrant_keys(ent)
+    try:
+        q = jolpica.qualifying(race["year"], race["round"])
+    except SourceError:
+        q = []
+        notes.append("Jolpica unavailable — qualifying result could not be checked.")
+    if q:
+        def ms(t):
+            if not t: return np.nan
+            m, sec = t.split(":") if ":" in t else (0, t)
+            return (int(m) * 60 + float(sec)) * 1000
+        qm = {}
+        for x in q:
+            d = x["Driver"]
+            num = d.get("permanentNumber") or x.get("number")
+            did = (by_num.get(int(num)) if num and str(num).isdigit() else None) or by_code.get(d.get("code")) or d["driverId"].replace("_", "-")
+            qm[did] = (int(x["position"]), np.nanmin([ms(x.get(k)) for k in ("Q1", "Q2", "Q3")] or [np.nan]))
+        ent["q_pos"] = ent.driver_id.map(lambda d: qm.get(d, (np.nan, np.nan))[0])
+        ent["q_ms"] = ent.driver_id.map(lambda d: qm.get(d, (np.nan, np.nan))[1])
+        if ent.q_pos.notna().mean() < 0.9:
+            notes.append(f"Only {int(ent.q_pos.notna().sum())} of {len(ent)} drivers could be matched to the qualifying result.")
+        ent["grid"] = ent.q_pos
+        source = "Jolpica qualifying classification (grid penalties not applied)"
+    og = _official_grid(race)
+    if og:
+        g = {by_num.get(int(x["driver_number"])): int(x["position"]) for x in og if x.get("driver_number")}
+        g.pop(None, None)
+        if len(g) >= 0.7 * len(ent):
+            ent["grid"] = ent.driver_id.map(lambda d: g.get(d, np.nan))
+            source = "Official starting grid (OpenF1, penalties applied)"
+    ov = grid_override(race["race_id"])
+    if ov:
+        g = {by_code.get(c.strip().upper()): i + 1 for i, c in enumerate(ov["codes"])}
+        g.pop(None, None)
+        ent["grid"] = ent.driver_id.map(lambda d: g.get(d, np.nan))
+        source = "Grid entered by the site admin" + (f" — {ov['note']}" if ov.get("note") else "") + " (includes penalties)"
+    return ent, source, notes
+
+
+
 @cached(ttl=1800)
 def prerace_prediction(race_id: int | None = None) -> dict:
     race = _race(race_id) if race_id else _next_race()
@@ -161,20 +261,8 @@ def prerace_prediction(race_id: int | None = None) -> dict:
         ent["race_id"] = race["race_id"]
         ent["grid"] = np.nan; ent["q_pos"] = np.nan; ent["q_ms"] = np.nan
         notes.append("Entry list assumed equal to the most recent race (HISTORICAL).")
-        try:   # qualifying, if it has happened (Jolpica is refreshed sooner than the F1DB release)
-            q = jolpica.qualifying(race["year"], race["round"])
-            if q:
-                def ms(s):
-                    if not s: return np.nan
-                    m, sec = s.split(":") if ":" in s else (0, s)
-                    return (int(m) * 60 + float(sec)) * 1000
-                qm = {x["Driver"]["driverId"].replace("_", "-"): (int(x["position"]), np.nanmin([ms(x.get(k)) for k in ("Q1", "Q2", "Q3")] or [np.nan])) for x in q}
-                ent["q_pos"] = ent.driver_id.map(lambda d: qm.get(d, (np.nan, np.nan))[0])
-                ent["q_ms"] = ent.driver_id.map(lambda d: qm.get(d, (np.nan, np.nan))[1])
-                ent["grid"] = ent.q_pos
-                grid_source = "Jolpica qualifying classification (grid penalties not applied)"
-        except SourceError:
-            notes.append("Jolpica unavailable — qualifying result could not be checked.")
+        ent, grid_source, gnotes = _apply_grid(race, ent)
+        notes += gnotes
         extra = ent
     f = _feature_frame(extra)
     rows = f[f.race_id == race["race_id"]].reset_index(drop=True)

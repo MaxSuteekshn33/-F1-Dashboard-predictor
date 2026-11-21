@@ -321,6 +321,24 @@ def _admin(code: str | None) -> None:
         raise HTTPException(403, "That admin code is not right.")
 
 
+@app.post("/api/next/grid")
+def next_grid(body: dict = Body(...), x_admin_code: str | None = Header(default=None)):
+    """Admin: set the starting grid for the upcoming race in order, as driver codes (["ANT", "VER", ...]), e.g. to apply
+    grid penalties as soon as they are announced. An empty list removes it. Everyone sees the updated prediction."""
+    _admin(x_admin_code)
+    race = sv._next_race()
+    if not race:
+        raise HTTPException(404, "No upcoming race.")
+    codes = [str(c).strip().upper() for c in (body.get("codes") or []) if str(c).strip()]
+    if codes and len(set(codes)) != len(codes):
+        raise HTTPException(400, "A driver appears twice in the grid.")
+    sv.set_grid_override(race["race_id"], codes or None, str(body.get("note") or "")[:120])
+    nextrace.overview.clear(); nextrace._result_cache.clear()
+    p = sv.clean(sv.prerace_prediction())
+    return {"race": race["gp_name"], "grid_source": p.get("grid_source"), "variant": p.get("variant"),
+            "grid": [{"code": d["code"], "grid": d["grid"]} for d in sorted(p.get("drivers", []), key=lambda d: d["grid"] or 99)]}
+
+
 @app.post("/api/live/rehearsal")
 def rehearsal_start(body: dict = Body(default={}), x_admin_code: str | None = Header(default=None)):
     """Replay a stored race through the live path (a labelled simulation). Everyone viewing the site sees it."""
