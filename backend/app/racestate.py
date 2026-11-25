@@ -266,6 +266,31 @@ def _state(session_key: int, lap: int | None = None) -> dict:
             r["gap"] = "OUT"
         prev = r
     ordered = run + rest
+    # Once the race is over, the result is the stewards' classification, not the order cars crossed the line:
+    # time penalties move people (Las Vegas 2026: Leclerc sixth on the road, tenth in the result). Use the
+    # official classification for the final order and gaps whenever the provider has published it.
+    classification = "timing order (cars as they last crossed the line)"
+    if finished and len(res) and "position" in res.columns and res.position.notna().sum() >= 0.5 * len(ordered):
+        off = {int(x.driver_number): x for x in res.itertuples()}
+        placed = [r for r in ordered if r["driver_number"] in off and not pd.isna(off[r["driver_number"]].position)]
+        placed.sort(key=lambda r: off[r["driver_number"]].position)
+        ordered = placed + [r for r in ordered if r not in placed]
+        prev = None
+        for i, r in enumerate(ordered):
+            r["position"] = i + 1
+            r["gained"] = (r["grid"] - r["position"]) if r["grid"] else None
+            if i < len(placed):
+                g = getattr(off[r["driver_number"]], "gap_to_leader", None)
+                gs = pd.to_numeric(pd.Series([g]), errors="coerce").iloc[0]
+                if i == 0:
+                    r["gap"], r["gap_s"], r["interval_s"] = "LEADER", 0.0, None
+                elif not pd.isna(gs):
+                    r["gap_s"] = round(float(gs), 3); r["gap"] = f"+{r['gap_s']:.3f}"
+                    r["interval_s"] = round(r["gap_s"] - prev["gap_s"], 3) if prev and prev.get("gap_s") is not None else None
+                elif isinstance(g, str) and g.strip():
+                    r["gap"], r["gap_s"], r["interval_s"] = g.strip(), None, None
+            prev = r
+        classification = "official classification (OpenF1 session result, penalties applied)"
     fl = known.loc[known.lap_duration.idxmin()] if len(known) and known.lap_duration.notna().any() else None
     w = d["weather"]
     wk = w[w.date <= T].sort_values("date") if len(w) else w
@@ -288,7 +313,7 @@ def _state(session_key: int, lap: int | None = None) -> dict:
     if not d["f1db"]: lim.append("Race not matched in F1DB; scheduled race distance unknown.")
     return {
         "session": sess, "f1db": d["f1db"], "mode": md, "lap": lap, "max_lap": visible, "total_laps": d["total_laps"],
-        "T": T, "rows": ordered, "track_status": ts, "events": _events(d, T),
+        "T": T, "rows": ordered, "classification": classification, "track_status": ts, "events": _events(d, T),
         "neutralisations": {"SC": sum(1 for t, s in d["status_events"] if s == "SC" and t <= T),
                             "VSC": sum(1 for t, s in d["status_events"] if s == "VSC" and t <= T),
                             "RED": sum(1 for t, s in d["status_events"] if s == "RED" and t <= T)},

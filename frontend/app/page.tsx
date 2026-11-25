@@ -90,7 +90,7 @@ export default function CommandCentre() {
           </div>
           <button className="btn" onClick={() => exportCsv(c, rows)} title="Download the rows shown as a CSV file">↓ Export CSV</button>
         </>}
-        note={<>{c.prediction_note} Gaps are measured at each car's last timing-line crossing. Positions gained are relative to the first position record of the session (grid). Click a row to make that driver the focus for the strategy, weather and recommendation pages. {r.wsState === "open" ? "New laps are pushed live over the WebSocket." : "WebSocket not connected — refreshing every 60 s."}</>}>
+        note={<>{c.prediction_note} {String(c.classification || "").startsWith("official") ? "Final order and gaps are the official classification, with time penalties applied." : "Gaps are measured at each car's last timing-line crossing."} Positions gained are relative to the first position record of the session (grid). Click a row to make that driver the focus for the strategy, weather and recommendation pages. {r.wsState === "open" ? "New laps are pushed live over the WebSocket." : "WebSocket not connected — refreshing every 60 s."}</>}>
         <div className="max-h-[680px] overflow-auto">
           <table className="grid-t">
             <thead><tr>

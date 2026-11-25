@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Bar as RBar, BarChart, CartesianGrid, Cell, ErrorBar, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useApi, useRace } from "@/lib/api";
 import { Bar, ChartTip, Driver, GRID, Notes, Panel, State, Tabs, Tag, Tyre, num, pct, signed, teamColour } from "@/components/ui";
@@ -47,6 +47,14 @@ export default function Predictor() {
   const [open, setOpen] = useState<string | number | null>(null);
   const raceId = r.cmd?.f1db?.race_id;
   const [which, setWhich] = useState<"next" | "selected">("next");
+  // A finished race opened on its final lap has no in-race prediction to show, so start on the pre-race view
+  // (once; after that the tabs are the visitor's choice).
+  const chosen = useRef(false);
+  useEffect(() => {
+    if (chosen.current || !r.cmd) return;
+    chosen.current = true;
+    if (r.lap === null && r.cmd.track_status === "FINISHED") setTab("prerace");
+  }, [r.cmd, r.lap]);
   const { data: ir, loading: irL, error: irE, stale: irS } = useApi<any>(tab === "inrace" && r.sessionKey ? `/api/predict/inrace?${r.q}` : null, r.tick);
   const { data: pr, loading: prL, error: prE } = useApi<any>(tab === "prerace" ? `/api/predict/prerace${which === "selected" && raceId ? `?race_id=${raceId}` : ""}` : null, r.tick);
   return (
@@ -57,6 +65,9 @@ export default function Predictor() {
       </div>
 
       {tab === "inrace" && (
+        <>{ir && !ir.available && r.cmd?.max_lap > 3 && <div className="flex flex-wrap items-center gap-3">
+          <button className="btn primary" onClick={() => r.setLap(Math.round(r.cmd.max_lap / 2))}>Go to lap {Math.round(r.cmd.max_lap / 2)}</button>
+          <button className="btn" onClick={() => setTab("prerace")}>See the pre-race prediction</button></div>}
         <State loading={irL} error={irE} empty={ir && !ir.available ? ir.reason : null}>
           {ir?.available && (
             <div className={`space-y-5 ${irS ? "is-stale" : ""}`} aria-busy={irS}>
@@ -91,7 +102,7 @@ export default function Predictor() {
               </Panel>
             </div>
           )}
-        </State>
+        </State></>
       )}
 
       {tab === "prerace" && (
