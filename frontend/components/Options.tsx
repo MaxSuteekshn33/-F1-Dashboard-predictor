@@ -9,7 +9,7 @@ export function OptionTable({ options, best, timeKey = "time_vs_best", timeLabel
       <thead><tr><th>Option</th><th>Stops</th><th className="r">Exp. finish</th><th className="r">P10–P90</th><th className="r">Win</th><th className="r">Podium</th><th className="r">{timeLabel}</th><th className="r">Risk (pos. SD)</th><th className="r">Laps in traffic</th></tr></thead>
       <tbody>{options.map((o) => (
         <tr key={o.label} className={o.label === best ? "!bg-good/10" : ""}>
-          <td className="font-semibold">{o.label}{o.label === best && <span className="ml-2 rounded bg-good px-1.5 py-[1px] text-[11px] font-bold text-black">BEST</span>}</td>
+          <td className="font-semibold">{o.label}{o.label === best && <span className="ml-2 rounded bg-good px-1.5 py-[1px] text-[11px] font-bold text-black">Best</span>}</td>
           <td>{o.plan?.length ? o.plan.map((p: any, i: number) => <span key={i} className="mr-2 inline-flex items-center gap-1"><span className="num">L{p.lap}</span><Tyre compound={p.compound} /></span>) : <span className="text-faint">none</span>}</td>
           <td className="r num font-semibold">P{num(o.exp_pos)}</td><td className="r num text-dim">P{o.pos_p10}–P{o.pos_p90}</td><td className="r num">{pct(o.p_win)}<span className="text-faint"> ±{(o.p_win_se * 196).toFixed(1)}</span></td><td className="r num">{pct(o.p_podium)}</td>
           <td className="r num">{o[timeKey] === null || o[timeKey] === undefined ? "—" : `${signed(o[timeKey])} s`}</td><td className="r num text-dim">{num(o.risk_pos_sd, 2)}</td><td className="r num text-dim">{num(o.blocked_laps)}</td>

@@ -60,7 +60,7 @@ export default function Strategy() {
           <tbody>{s.strategies.map((x: any) => (
             <tr key={x.label} className={x.recommended ? "!bg-good/10" : ""} style={{ opacity: x.rule_ok ? 1 : 0.5 }}>
               <td className="num font-bold">{x.label}</td>
-              <td className="font-semibold">{x.name}{x.recommended && <span className="ml-2 rounded bg-good px-1.5 py-[1px] text-[11px] font-bold text-black">RECOMMENDED</span>}{!x.rule_ok && <span className="ml-2 text-[12px] text-bad">breaks 2-compound rule</span>}</td>
+              <td className="font-semibold">{x.name}{x.recommended && <span className="ml-2 rounded bg-good px-1.5 py-[1px] text-[11px] font-bold text-black">Recommended</span>}{!x.rule_ok && <span className="ml-2 text-[12px] text-bad">breaks 2-compound rule</span>}</td>
               <td>{x.plan.length ? x.plan.map((p: any, i: number) => <span key={i} className="mr-2 inline-flex items-center gap-1"><span className="num">L{p.lap}</span><Tyre compound={p.compound} /></span>) : <span className="text-faint">none</span>}</td>
               <td><Stints total={s.total_laps} lap={s.lap} stints={[...mine.map((m: any) => ({ ...m })), ...x.stints.filter((t: any) => t.from_lap > s.lap || t.to_lap > s.lap).map((t: any) => ({ compound: t.compound, from: Math.max(t.from_lap, s.lap + 1), to: t.to_lap, future: true }))]} /></td>
               <td className="r num">{x.recommended_pit_lap ? `L${x.recommended_pit_lap}` : "—"}</td><td className="r num">{num(x.pit_time_lost)} s</td><td className="r num">{num(x.deg_time)} s</td>

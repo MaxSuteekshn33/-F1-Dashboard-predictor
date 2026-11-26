@@ -8,6 +8,8 @@ export const COMPOUND: Record<string, { c: string; l: string }> = {
   SOFT: { c: "#ff4b3e", l: "S" }, MEDIUM: { c: "#f2c230", l: "M" }, HARD: { c: "#e9eaec", l: "H" },
   INTERMEDIATE: { c: "#3dbb61", l: "I" }, WET: { c: "#3d8bf2", l: "W" },
 };
+/** "PIT WINDOW" -> "Pit window". Codes from the server arrive in capitals; the page shows them in sentence case. */
+export const sentence = (t?: string | null) => (t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : "");
 export const teamColour = (c?: string | null) => (c ? `#${c.replace("#", "")}` : "#6b717d");
 
 export function fmtLap(s?: number | null): string {
@@ -39,7 +41,7 @@ const TAG_HELP: Record<string, string> = { OBSERVED: "Recorded data from a provi
 export function Tag({ kind, children }: { kind: string; children?: React.ReactNode }) {
   const c = TAGS[kind] || TAGS.UNAVAILABLE;
   return <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11.5px] font-bold" style={{ color: c }} title={TAG_HELP[kind] || ""}>
-    <span className="h-2 w-[3px] -skew-x-12" style={{ background: c }} />{children || kind}</span>;
+    <span className="h-2 w-[3px] -skew-x-12" style={{ background: c }} />{children || sentence(kind)}</span>;
 }
 
 export function Panel({ title, tags, right, children, className = "", note, pad = true }:
@@ -158,5 +160,5 @@ export function Confidence({ c }: { c?: { score: number; level: string } | null 
   if (!c) return null;
   const col = c.level === "HIGH" ? "#2fbf71" : c.level === "MEDIUM" ? "#e0a100" : "#a3a8b3";
   return <span className="inline-flex items-center gap-1.5 text-[12.5px]"><span className="h-1.5 w-1.5 rounded-full" style={{ background: col }} />
-    <span style={{ color: col }} className="font-semibold">{c.level}</span><span className="num text-faint">{(c.score * 100).toFixed(0)}%</span></span>;
+    <span style={{ color: col }} className="font-semibold">{sentence(c.level)}</span><span className="num text-faint">{(c.score * 100).toFixed(0)}%</span></span>;
 }

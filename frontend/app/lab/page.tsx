@@ -104,7 +104,7 @@ export default function Lab() {
           <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
             {good.map((x: any) => (
               <div key={x.name} className={`glass rounded-2xl p-4 ${x.best ? "!border-good/50" : ""}`}>
-                <div className="flex items-center gap-2"><span className="text-sm font-semibold">{x.name}</span>{x.best && <span className="rounded bg-good px-1.5 py-[1px] text-[11px] font-bold text-black">BEST</span>}</div>
+                <div className="flex items-center gap-2"><span className="text-sm font-semibold">{x.name}</span>{x.best && <span className="rounded bg-good px-1.5 py-[1px] text-[11px] font-bold text-black">Best</span>}</div>
                 <div className="num mt-2 grid grid-cols-3 gap-2 text-center" title="Expected finish averages over all simulations, including retirements">
                   <div><div className="text-[12px]r text-faint">Exp. finish</div><div className="text-xl font-semibold">P{num(x.exp_pos)}</div><div className="text-[12px] text-faint">P{x.pos_p10}–P{x.pos_p90}</div></div>
                   <div><div className="text-[12px]r text-faint">Win</div><div className="text-xl font-semibold">{pct(x.p_win)}</div><div className="text-[12px] text-faint">±{(x.p_win_se * 196).toFixed(1)} pts</div></div>

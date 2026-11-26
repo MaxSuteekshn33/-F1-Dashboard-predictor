@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { API_BASE, api, useApi, useRace } from "@/lib/api";
 import { useResolved } from "@/lib/browserSim";
-import { Bar, Confidence, Driver, Notes, Panel, Stat, State, Tag, Tyre, dt, fmtLap, num, pct, teamColour } from "@/components/ui";
+import { Bar, Confidence, Driver, Notes, Panel, Stat, State, Tag, Tyre, dt, fmtLap, num, pct, teamColour, sentence } from "@/components/ui";
 
 const hm = (t: number) => new Date(t * 1000).toISOString().slice(11, 19);
 
@@ -132,7 +132,7 @@ export default function LiveRace() {
             <State loading={!adv.data && !adv.error && !wxa.data} error={adv.error} empty={(adv.data?.note || (adv.data && wxa.data && recs.length === 0)) ? (adv.data?.note || "No action needed at this lap.") : null}>
               <div className="space-y-3">{recs.slice(0, 3).map((x: any, i: number) => (
                 <div key={i} className="rounded-2xl border border-line bg-white/[0.03] px-4 py-3">
-                  <div className="flex items-center gap-2 text-[12px] font-bold text-faint">{x.type}<span className="ml-auto"><Confidence c={x.confidence} /></span></div>
+                  <div className="flex items-center gap-2 text-[12px] font-bold text-faint">{sentence(x.type)}<span className="ml-auto"><Confidence c={x.confidence} /></span></div>
                   <div className="mt-1.5 text-[15px] font-semibold leading-snug">{x.decision}</div>
                   <div className="mt-1 prose-body text-dim">{x.title}. {x.advantage}.</div>
                 </div>))}</div>

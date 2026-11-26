@@ -1,7 +1,7 @@
 "use client";
 import { api, useApi, useRace } from "@/lib/api";
 import { useResolved } from "@/lib/browserSim";
-import { Confidence, Notes, Panel, State, Tag, pct, signed } from "@/components/ui";
+import { Confidence, Notes, Panel, State, Tag, pct, signed, sentence } from "@/components/ui";
 
 const TYPE: Record<string, string> = { WEATHER: "#3d8bf2", "SAFETY CAR": "#e0a100", "PIT WINDOW": "#2fbf71", "TRACK POSITION": "#2fbf71", UNDERCUT: "#c084fc", "DEFEND UNDERCUT": "#c084fc", STRATEGY: "#f2f3f5", "TYRE LIFE": "#ff5a52", DATA: "#a3a8b3" };
 const ORDER: Record<string, number> = { "SAFETY CAR": 0, WEATHER: 1, "PIT WINDOW": 2, "TRACK POSITION": 2, UNDERCUT: 3, "DEFEND UNDERCUT": 3, STRATEGY: 4, "TYRE LIFE": 5, DATA: 6 };
@@ -49,7 +49,7 @@ export default function Advisor() {
           {recs.map((x: any, i: number) => (
             <article key={`${x.type}-${i}`} className="glass page-in overflow-hidden rounded-2xl">
               <header className="flex flex-wrap items-center gap-3 px-5 pb-1 pt-4">
-                <span className="rounded-full border px-2 py-[2px] text-[11px] font-bold" style={{ borderColor: TYPE[x.type] || "#6b717d", color: TYPE[x.type] || "#a3a8b3" }}>{x.type}</span>
+                <span className="rounded-full border px-2 py-[2px] text-[11px] font-bold" style={{ borderColor: TYPE[x.type] || "#6b717d", color: TYPE[x.type] || "#a3a8b3" }}>{sentence(x.type)}</span>
                 <h2 className="text-sm font-semibold">{x.title}</h2><span className="ml-auto"><Confidence c={x.confidence} /></span>
               </header>
               <div className="grid gap-4 px-5 pb-5 pt-3 md:grid-cols-2">
