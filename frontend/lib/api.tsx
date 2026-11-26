@@ -6,6 +6,30 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 const WS = process.env.NEXT_PUBLIC_WS_URL || "";
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || (WS ? WS.replace(/^ws/, "http").replace(/\/ws\/live\/?$/, "") : "");
 
+// Display conventions applied to every response, so no page has to remember them:
+// - driver names arrive as "Max VERSTAPPEN" (the timing feed's convention) and are shown as "Max Verstappen";
+// - tyre compound names inside sentences ("on SOFT tyres") are shown in lower case.
+// A value that is exactly a compound ("SOFT") is left alone: pages use it as a key for colours and choices.
+const NAME_KEYS = new Set(["name", "full_name", "driver_name"]);
+const titleWord = (w: string) => w.split(/([-'’])/).map((part) => (/^\p{Lu}{2,}$/u.test(part) ? part[0] + part.slice(1).toLowerCase() : part)).join("");
+// only "First SURNAME" shapes: a space, some lower case, and a capitalised word — never a bare code such as "VER"
+export const properName = (v: string) => (v.includes(" ") && /\p{Ll}/u.test(v) && /\p{Lu}{3,}/u.test(v) && /^[\p{L}\s.'’-]+$/u.test(v) ? v.split(" ").map(titleWord).join(" ") : v);
+const SOURCE_WORD = /\b(OBSERVED|HISTORICAL|MODEL|ASSUMPTIONS?|FORECAST)\b/g;
+const COMPOUND_WORD = /\b(SOFT|MEDIUM|HARD|INTERMEDIATE|WET)(S?)\b/g;
+export function tidy<T>(v: T, key?: string): T {
+  if (typeof v === "string") {
+    if (key && NAME_KEYS.has(key)) return properName(v) as unknown as T;
+    if (!v.includes(" ")) return v;
+    // source words inside sentences ("an ASSUMPTION") read as ordinary words; a leading "OBSERVED · " prefix is
+    // kept as it is, because pages turn that prefix into a tag
+    return v.replace(COMPOUND_WORD, (m) => m.toLowerCase())
+      .replace(SOURCE_WORD, (m, _w, at: number, all: string) => (at === 0 ? (all.startsWith(m + " · ") ? m : m[0] + m.slice(1).toLowerCase()) : m.toLowerCase())) as unknown as T;
+  }
+  if (Array.isArray(v)) { for (let i = 0; i < v.length; i++) v[i] = tidy(v[i], key); return v; }
+  if (v && typeof v === "object") { const o = v as Record<string, unknown>; for (const k in o) o[k] = tidy(o[k], k); }
+  return v;
+}
+
 export async function api<T = any>(path: string, body?: unknown, attempt = 0): Promise<T> {
   let r: Response;
   try {
@@ -25,7 +49,7 @@ export async function api<T = any>(path: string, body?: unknown, attempt = 0): P
     try { msg = (await r.json()).detail || msg; } catch {}
     throw new Error(msg);
   }
-  return r.json();
+  return tidy(await r.json());
 }
 
 // ---- global activity signal: lets the shell show that something is being calculated

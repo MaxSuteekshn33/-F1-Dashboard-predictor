@@ -10,7 +10,7 @@ function Stints({ stints, total, lap, plan }: { stints: any[]; total: number; la
   return (
     <div className="relative h-5 w-full rounded-sm bg-white/[0.08]">
       {stints.map((s, i) => (
-        <div key={i} className="absolute top-0 flex h-5 items-center justify-center rounded-sm text-[11px] font-bold text-black" title={`${s.compound} laps ${s.from}–${s.to}`}
+        <div key={i} className="absolute top-0 flex h-5 items-center justify-center rounded-sm text-[11px] font-bold text-black" title={`${s.compound ? s.compound[0] + s.compound.slice(1).toLowerCase() : "?"} laps ${s.from}–${s.to}`}
           style={{ left: `${((s.from - 1) / total) * 100}%`, width: `calc(${w(s.from, s.to)} - 2px)`, background: COMPOUND[s.compound]?.c || "#6b717d", opacity: s.future ? 0.45 : 1 }}>{COMPOUND[s.compound]?.l}</div>
       ))}
       <div className="absolute top-[-3px] h-[26px] w-px bg-white" style={{ left: `${(lap / total) * 100}%` }} />
@@ -89,7 +89,7 @@ export default function Strategy() {
               <CartesianGrid stroke={GRID} vertical={false} /><XAxis dataKey="age" type="number" name="Tyre age" tickLine={false} axisLine={{ stroke: GRID }} tickFormatter={(v) => `${v}`} />
               <YAxis dataKey="lap_time" type="number" name="Lap time" domain={["dataMin - 0.3", "dataMax + 0.3"]} tickFormatter={(v) => fmtLap(v)} tickLine={false} axisLine={false} width={64} /><ZAxis range={[28, 28]} />
               <Tooltip content={<ChartTip title={() => "Tyre age / median lap"} fmt={(v: number, n: string) => (n === "Lap time" ? fmtLap(v) : `${v} laps`)} />} /><Legend />
-              {Object.entries(degBy).map(([c, pts]) => <Scatter key={c} name={c} data={pts} fill={COMPOUND[c]?.c} isAnimationActive={false} />)}
+              {Object.entries(degBy).map(([c, pts]) => <Scatter key={c} name={c[0] + c.slice(1).toLowerCase()} data={pts} fill={COMPOUND[c]?.c} isAnimationActive={false} />)}
             </ScatterChart></ResponsiveContainer>
         </Panel>
       </div>

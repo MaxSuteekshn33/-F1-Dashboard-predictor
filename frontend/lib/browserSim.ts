@@ -2,6 +2,7 @@
 // Client side of "the browser runs the simulations": run prepared packages in Web Workers (several at once),
 // and complete server responses that arrived with `deferred` packages instead of simulated results.
 import { useEffect, useState } from "react";
+import { tidy } from "./api";
 import { advisorFinish, advisorMiddle, advisorPackages, finishDeferred, runLab, type Job, type Package, type SimResult } from "./sim";
 
 /** Run every package, up to four at a time, each in its own worker. Results come back in the order given. */
@@ -46,9 +47,9 @@ export async function resolveDeferred<T = any>(data: any, fromServer: () => Prom
   try {
     if (data.deferred.kind === "advisor") {        // two rounds: the plans first, then "pit now" against the plan they favour
       const mid = advisorMiddle(data, await runPackages(advisorPackages(data)));
-      return advisorFinish(data, mid, await runPackages(mid.next.map((j: any) => j.package))) as T;
+      return tidy(advisorFinish(data, mid, await runPackages(mid.next.map((j: any) => j.package)))) as T;
     }
-    return finishDeferred(data, await runPackages(data.deferred.jobs.map((j: any) => j.package))) as T;
+    return tidy(finishDeferred(data, await runPackages(data.deferred.jobs.map((j: any) => j.package)))) as T;
   }
   catch { return { ...(await fromServer()), engine: "server" } as T; }
 }

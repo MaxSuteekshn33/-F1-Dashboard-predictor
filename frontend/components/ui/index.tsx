@@ -95,7 +95,7 @@ export function Tyre({ compound, age }: { compound?: string | null; age?: number
   if (!compound) return <span className="text-faint">—</span>;
   const c = COMPOUND[compound] || { c: "#6b717d", l: "?" };
   return (
-    <span className="inline-flex items-center gap-1.5" title={compound}>
+    <span className="inline-flex items-center gap-1.5" title={sentence(compound)}>
       <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full border-[1.5px] text-[11px] font-bold" style={{ borderColor: c.c, color: c.c, background: `${c.c}14` }}>{c.l}</span>
       {age !== undefined && age !== null && <span className="num text-dim">{age}</span>}
     </span>

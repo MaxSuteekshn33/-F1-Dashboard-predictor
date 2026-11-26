@@ -15,7 +15,7 @@ const CMP = ["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"];
 function N({ label, value, onChange, min, max, step = 1, w = "w-16" }: any) {
   return <label className="flex items-center gap-1.5 text-faint">{label}<input type="number" className={w} value={value ?? ""} min={min} max={max} step={step} onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))} /></label>;
 }
-function C({ value, onChange }: any) { return <select value={value} onChange={(e) => onChange(e.target.value)}>{CMP.map((c) => <option key={c}>{c}</option>)}</select>; }
+function C({ value, onChange }: any) { return <select value={value} onChange={(e) => onChange(e.target.value)}>{CMP.map((c) => <option key={c} value={c}>{c[0] + c.slice(1).toLowerCase()}</option>)}</select>; }
 
 export default function Lab() {
   const r = useRace();
@@ -81,7 +81,7 @@ export default function Lab() {
                 {s.sc && <><N label="on lap" value={s.sc_lap ?? lap + 1} min={lap + 1} max={total} onChange={(v: number) => upd(i, { sc_lap: v })} /><select value={s.sc_type} onChange={(e) => upd(i, { sc_type: e.target.value })}><option value="SC">Safety Car</option><option value="VSC">Virtual SC</option></select></>}</div>
               <div className="flex flex-wrap items-center gap-2"><span className="w-16 text-faint">Track</span><N label="temp Δ°C" value={s.track_temp_delta} min={-20} max={20} onChange={(v: number) => upd(i, { track_temp_delta: v ?? 0 })} /><N label="pit stop Δs" value={s.pit_duration_delta} min={-3} max={20} step={0.5} onChange={(v: number) => upd(i, { pit_duration_delta: v ?? 0 })} /></div>
               <div className="flex flex-wrap items-center gap-2"><span className="w-16 text-faint">Car state</span><N label="position" value={s.ov_position} min={1} max={22} onChange={(v: number) => upd(i, { ov_position: v })} />
-                <select value={s.ov_compound || ""} onChange={(e) => upd(i, { ov_compound: e.target.value || undefined })}><option value="">tyre: as is</option>{CMP.map((c) => <option key={c}>{c}</option>)}</select><N label="age" value={s.ov_age} min={0} max={60} onChange={(v: number) => upd(i, { ov_age: v })} /></div>
+                <select value={s.ov_compound || ""} onChange={(e) => upd(i, { ov_compound: e.target.value || undefined })}><option value="">tyre: as is</option>{CMP.map((c) => <option key={c} value={c}>{c[0] + c.slice(1).toLowerCase()}</option>)}</select><N label="age" value={s.ov_age} min={0} max={60} onChange={(v: number) => upd(i, { ov_age: v })} /></div>
               <div className="flex flex-wrap items-center gap-2"><span className="w-16 text-faint">Rival</span>
                 <select value={s.rival ?? ""} onChange={(e) => upd(i, { rival: e.target.value ? Number(e.target.value) : undefined })}><option value="">—</option>{rows.filter((x) => x.driver_number !== r.driver && x.status === "RUNNING").map((x) => <option key={x.driver_number} value={x.driver_number}>P{x.position} {x.code}</option>)}</select>
                 <select value={s.rival_mode} onChange={(e) => upd(i, { rival_mode: e.target.value as any })}><option value="none">own plan</option><option value="stay">stays out</option><option value="pit">pits on lap…</option></select>
@@ -171,7 +171,7 @@ function SafetyCar() {
       {d.note ? <State empty={d.note} /> : (<>
         <div className="mb-3 grid gap-2 md:grid-cols-3">{Object.entries(d.verdicts || {}).map(([k, v]: any) => (
           <div key={k} className="rounded-xl border border-line bg-panel2 px-3 py-2 text-[13px]"><div className="text-[12px]r text-faint">{k === "sc" ? "Under Safety Car" : k === "vsc" ? "Under VSC" : "Under green"}</div>
-            <div className="mt-0.5 text-sm font-semibold" style={{ color: v.better === "PIT" ? "#2fbf71" : "#f2f3f5" }}>{v.better}</div>
+            <div className="mt-0.5 text-sm font-semibold" style={{ color: v.better === "PIT" ? "#2fbf71" : "#f2f3f5" }}>{v.better === "PIT" ? "Pit" : "Stay out"}</div>
             <div className="num text-dim">pitting changes expected finish by {signed(v.pit_minus_stay_positions, 2)} positions{k !== "green" && d.pit_loss ? `, saves ${k === "sc" ? d.pit_loss.saved_sc : d.pit_loss.saved_vsc} s of pit loss` : ""}</div></div>))}</div>
         <OptionTable options={d.options || []} timeKey="time_vs_first" timeLabel="Time vs first row" />
         <div className="mt-2 text-[12.5px] text-faint">Times are comparable only between rows with the same neutralisation. {d.pit_loss?.factor_note}</div>
