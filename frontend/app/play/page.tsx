@@ -8,7 +8,7 @@ import { Notes, Panel, State, Tabs, dt, teamColour } from "@/components/ui";
 import { Auth } from "@/components/Auth";
 
 const EMPTY: Pick = { winner: "", p2: "", p3: "", fastest_lap: null, safety_car: null, winner_stops: null };
-const RULES = ["Winner in the right place: 10 points", "Second place exact: 6 · third place exact: 4", "A podium driver in the wrong slot: 2", "Fastest lap: 3", "Safety Car deployed, yes or no: 3", "Number of pit stops the winner makes: 3"];
+const RULES = ["Winner in the right place: 10 points", "Second place exact: 6, third place exact: 4", "A podium driver in the wrong slot: 2", "Fastest lap: 3", "Safety Car deployed, yes or no: 3", "Number of pit stops the winner makes: 3"];
 
 function Countdown({ to }: { to: number }) {
   const [now, setNow] = useState(() => Date.now());
@@ -22,7 +22,7 @@ function DriverSelect({ drivers, value, onChange, exclude = [], label, disabled,
     <label className="flex flex-col gap-1.5 text-dim">{label}
       <select value={value || ""} disabled={disabled} onChange={(e) => onChange(e.target.value || null)} required={!optional}>
         <option value="">{optional ? "No pick" : "Choose a driver"}</option>
-        {drivers.filter((d: any) => !exclude.includes(d.id) || d.id === value).map((d: any) => <option key={d.id} value={d.id}>{d.code} · {d.name} ({d.team})</option>)}
+        {drivers.filter((d: any) => !exclude.includes(d.id) || d.id === value).map((d: any) => <option key={d.id} value={d.id}>{d.code}, {d.name} ({d.team})</option>)}
       </select>
     </label>
   );
@@ -109,17 +109,17 @@ export default function Play() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Predictions &amp; leagues</h1>
-        <span className="text-xs text-dim">Signed in as <b className="text-ink">{profile?.display_name || session.user.email}</b> · {total} points from {history.length} scored {history.length === 1 ? "race" : "races"}</span>
+        <h1 className="text-xl font-semibold">Predictions &amp; leagues</h1>
+        <span className="text-[13px] text-dim">Signed in as <b className="text-ink">{profile?.display_name || session.user.email}</b>, {total} points from {history.length} scored {history.length === 1 ? "race" : "races"}</span>
         <span className="ml-auto flex gap-2"><Link href="/account" className="btn">Account</Link><button className="btn" onClick={() => supabase!.auth.signOut()}>Sign out</button></span>
       </div>
       {err && <State error={err} />}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,6fr)_minmax(0,6fr)]">
-        <Panel title={next ? `Your picks — ${next.name}` : "Your picks"} right={next && <span>Locks in <b className="text-ink"><Countdown to={new Date(next.starts_at).getTime()} /></b> · {dt(new Date(next.starts_at).getTime() / 1000)}</span>}
-          note={<>Scoring: {RULES.join(" · ")}. Picks can be changed until lights out, then they lock and your league can see them. The Safety Car and pit-stop answers are scored only when that data is available for the race.</>}>
+        <Panel title={next ? `Your picks — ${next.name}` : "Your picks"} right={next && <span>Locks in <b className="text-ink"><Countdown to={new Date(next.starts_at).getTime()} /></b>, {dt(new Date(next.starts_at).getTime() / 1000)}</span>}
+          note={<>Scoring: {RULES.join("; ")}. Picks can be changed until lights out, then they lock and your league can see them. The Safety Car and pit-stop answers are scored only when that data is available for the race.</>}>
           {!next ? <State empty="No upcoming race in the calendar yet." /> : (
-            <form onSubmit={save} className="space-y-3 text-xs">
+            <form onSubmit={save} className="space-y-3 text-[13px]">
               <div className="grid gap-3 sm:grid-cols-3">
                 <DriverSelect label="Winner" drivers={drivers} value={form.winner} exclude={[form.p2, form.p3]} onChange={(v: string) => setForm({ ...form, winner: v || "" })} />
                 <DriverSelect label="Second" drivers={drivers} value={form.p2} exclude={[form.winner, form.p3]} onChange={(v: string) => setForm({ ...form, p2: v || "" })} />
@@ -146,13 +146,13 @@ export default function Play() {
           {leagues.length > 0 && <div className="mb-4"><Tabs tabs={leagues.map((l) => [l.id, l.name])} value={league || ""} onChange={setLeague} /></div>}
           {current ? (
             <div className="overflow-auto rounded-xl border border-line"><table className="grid-t"><thead><tr><th>#</th><th>Player</th><th className="r">Points</th><th className="r">Races scored</th><th className="r">Last race</th><th className="r">Next race</th></tr></thead>
-              <tbody>{board.map((b, i) => <tr key={b.user_id} className={b.user_id === uid ? "!bg-white/[0.07]" : ""}><td className="num">{i + 1}</td><td className="font-semibold">{b.display_name}{b.user_id === uid && <span className="ml-2 text-[10px] font-normal text-faint">you</span>}</td><td className="r num font-semibold">{b.points}</td><td className="r num text-dim">{b.races_scored}</td><td className="r num text-dim">{b.last_race_points ?? "—"}</td><td className="r">{b.has_next_pick ? <span className="text-good">picked</span> : <span className="text-faint">not yet</span>}</td></tr>)}</tbody></table></div>
+              <tbody>{board.map((b, i) => <tr key={b.user_id} className={b.user_id === uid ? "!bg-white/[0.07]" : ""}><td className="num">{i + 1}</td><td className="font-semibold">{b.display_name}{b.user_id === uid && <span className="ml-2 text-[12px] font-normal text-faint">you</span>}</td><td className="r num font-semibold">{b.points}</td><td className="r num text-dim">{b.races_scored}</td><td className="r num text-dim">{b.last_race_points ?? "—"}</td><td className="r">{b.has_next_pick ? <span className="text-good">picked</span> : <span className="text-faint">not yet</span>}</td></tr>)}</tbody></table></div>
           ) : <State empty="You are not in a league yet. Create one and share its invite code, or join a friend's with their code." />}
-          <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
+          <div className="mt-4 grid gap-3 text-[13px] sm:grid-cols-2">
             <div className="flex gap-2"><input type="text" className="min-w-0 flex-1" placeholder="New league name" maxLength={40} value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="New league name" /><button className="btn" disabled={newName.trim().length < 2} onClick={create}>Create</button></div>
-            <div className="flex gap-2"><input type="text" className="min-w-0 flex-1 uppercase" placeholder="Invite code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} aria-label="Invite code" /><button className="btn" disabled={code.trim().length < 4} onClick={join}>Join</button></div>
+            <div className="flex gap-2"><input type="text" className="min-w-0 flex-1" placeholder="Invite code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} aria-label="Invite code" /><button className="btn" disabled={code.trim().length < 4} onClick={join}>Join</button></div>
           </div>
-          {lmsg && <div role="alert" className="mt-3 rounded-xl border border-bad/30 bg-bad/10 px-4 py-2.5 text-xs text-[#ffb3ae]">{lmsg}</div>}
+          {lmsg && <div role="alert" className="mt-3 rounded-xl border border-bad/30 bg-bad/10 px-4 py-2.5 text-[13px] text-[#ffb3ae]">{lmsg}</div>}
         </Panel>
       </div>
 
@@ -171,7 +171,7 @@ export default function Play() {
       <Panel title="Your scored races" pad={false}>
         <State empty={history.length === 0 ? "Nothing scored yet. Your first points arrive after the next race you make picks for." : null}>
           <div className="overflow-auto"><table className="grid-t"><thead><tr><th>Race</th><th>Your podium</th><th>Actual podium</th><th className="r">Points</th></tr></thead>
-            <tbody>{history.map((r) => <tr key={r.id}><td>{r.season} {r.name}</td><td className="num">{nameOf(r, mine[r.id].winner)} · {nameOf(r, mine[r.id].p2)} · {nameOf(r, mine[r.id].p3)}</td><td className="num text-dim">{nameOf(r, r.result.winner)} · {nameOf(r, r.result.p2)} · {nameOf(r, r.result.p3)}</td><td className="r num font-semibold">{score(mine[r.id], r.result)}</td></tr>)}</tbody></table></div>
+            <tbody>{history.map((r) => <tr key={r.id}><td>{r.season} {r.name}</td><td className="num">{nameOf(r, mine[r.id].winner)}, {nameOf(r, mine[r.id].p2)}, {nameOf(r, mine[r.id].p3)}</td><td className="num text-dim">{nameOf(r, r.result.winner)}, {nameOf(r, r.result.p2)}, {nameOf(r, r.result.p3)}</td><td className="r num font-semibold">{score(mine[r.id], r.result)}</td></tr>)}</tbody></table></div>
         </State>
       </Panel>
       <Notes title="How scoring works" items={[...RULES, "Results are published by the scheduled data refresh after each race weekend, so points can take a day or two to appear.", "This is a points game for fun. There is no money, and nothing here is betting advice."]} />

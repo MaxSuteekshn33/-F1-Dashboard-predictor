@@ -43,24 +43,24 @@ export default function CommandCentre() {
       <section className="glass card-hero overflow-hidden">
         <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:items-end">
           <div>
-            <div className="eyebrow">{c.session.year} · Round {c.f1db?.round ?? "—"} · {c.session.session_name}</div>
-            <h1 className="mt-1.5 text-[30px] font-semibold leading-tight tracking-tight">{c.title}</h1>
-            <div className="mt-1 text-[13px] text-dim">{c.circuit} · {c.session.location}, {c.session.country_name}</div>
-            {leader && <div className="mt-4 inline-flex items-center gap-3 border border-white/10 bg-[#22222d] [border-radius:2px_10px_2px_2px] py-1.5 pl-3 pr-4 text-[12.5px]">
+            <h1 className="text-[30px] font-semibold leading-tight">{c.title}</h1>
+            <div className="eyebrow mt-1.5">{c.session.year}, Round {c.f1db?.round ?? "—"}, {c.session.session_name}</div>
+            <div className="mt-1 text-[14px] text-dim">{c.circuit}, {c.session.location}, {c.session.country_name}</div>
+            {leader && <div className="mt-4 inline-flex items-center gap-3 border border-white/10 bg-[#22222d] [border-radius:2px_10px_2px_2px] py-1.5 pl-3 pr-4 text-[14px]">
               <span className="text-faint">{c.track_status === "FINISHED" ? "Winner" : "Leader"}</span><Driver code={leader.code} colour={leader.team_colour} name={leader.name} />
               <span className="text-dim">{leader.team}</span><Tyre compound={leader.compound} age={leader.tyre_age} /></div>}
           </div>
           <div>
             <div className="flex items-baseline justify-between">
-              <div className="font-display text-[48px] font-semibold leading-none [font-variant-numeric:tabular-nums]">{c.lap}<span className="text-[18px] text-faint"> / {c.total_laps ?? "—"}</span></div>
-              <div className="text-right text-[11.5px] text-dim">{c.total_laps ? `${c.total_laps - c.lap} laps to go` : "distance unknown"}{c.est_remaining_s ? <> · ~{fmtDur(c.est_remaining_s)}</> : null}</div>
+              <div className="font-display text-[40px] font-semibold leading-none tracking-[-0.02em] [font-variant-numeric:tabular-nums]">{c.lap}<span className="text-[18px] text-faint"> / {c.total_laps ?? "—"}</span></div>
+              <div className="text-right text-[13px] text-dim">{c.total_laps ? `${c.total_laps - c.lap} laps to go` : "distance unknown"}{c.est_remaining_s ? <>, ~{fmtDur(c.est_remaining_s)}</> : null}</div>
             </div>
             <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]" role="progressbar" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Race distance completed">
               <div className="h-full rounded-full bg-gradient-to-r from-[#ff3a22] to-[#e10600] transition-[width] duration-500" style={{ width: `${progress * 100}%` }} /></div>
-            <div className="num mt-4 grid grid-cols-3 gap-4 text-[12px]">
-              <div><div className="text-[10px] font-medium uppercase tracking-[.1em] text-faint">Fastest lap</div><div className="mt-1 text-[15px] font-semibold text-[#c9a7ff]">{fmtLap(c.fastest_lap?.time)}</div><div className="text-dim">{c.fastest_lap ? `${c.fastest_lap.code} · lap ${c.fastest_lap.lap}` : "—"}</div></div>
-              <div><div className="text-[10px] font-medium uppercase tracking-[.1em] text-faint">Neutralisations</div><div className="mt-1 text-[15px] font-semibold">{c.neutralisations.SC + c.neutralisations.VSC + c.neutralisations.RED}</div><div className="text-dim">{c.neutralisations.SC} SC · {c.neutralisations.VSC} VSC · {c.neutralisations.RED} red</div></div>
-              <div><div className="text-[10px] font-medium uppercase tracking-[.1em] text-faint">Timing as of</div><div className="mt-1 text-[15px] font-semibold">{dt(c.as_of).slice(11, 16)} <span className="text-[11px] font-normal text-faint">UTC</span></div><div className="text-dim">{dt(c.as_of).slice(0, 10)} · {c.source}</div></div>
+            <div className="num mt-4 grid grid-cols-3 gap-4 text-[13px]">
+              <div><div className="text-[12px] font-medium text-faint">Fastest lap</div><div className="mt-1 text-[16px] font-semibold text-[#c9a7ff]">{fmtLap(c.fastest_lap?.time)}</div><div className="text-dim">{c.fastest_lap ? `${c.fastest_lap.code}, lap ${c.fastest_lap.lap}` : "—"}</div></div>
+              <div><div className="text-[12px] font-medium text-faint">Neutralisations</div><div className="mt-1 text-[16px] font-semibold">{c.neutralisations.SC + c.neutralisations.VSC + c.neutralisations.RED}</div><div className="text-dim">{c.neutralisations.SC} SC, {c.neutralisations.VSC} VSC, {c.neutralisations.RED} red</div></div>
+              <div><div className="text-[12px] font-medium text-faint">Timing as of</div><div className="mt-1 text-[16px] font-semibold">{dt(c.as_of).slice(11, 16)} <span className="text-[12.5px] font-normal text-faint">UTC</span></div><div className="text-dim">{dt(c.as_of).slice(0, 10)}, {c.source}</div></div>
             </div>
           </div>
         </div>
@@ -76,7 +76,7 @@ export default function CommandCentre() {
         <Stat label="Rain at the track" tag="OBSERVED" value={w ? (w.rainfall ? "Raining" : "Dry") : "—"} accent={w?.rainfall ? "#3d8bf2" : undefined} sub={w ? `Sensor wet ${Math.round((w.rain_share_15min ?? 0) * 100)}% of last 15 min` : ""} />
         <Stat label="Rain probability" tag="FORECAST" value={fs?.max_prob !== null && fs?.max_prob !== undefined ? `${fs.max_prob}%` : "—"}
           sub={wx?.forecast?.available === false ? "Forecast unavailable" : wx ? `Open-Meteo, session window${wx.forecast?.kind === "analysis" ? " (hindsight)" : ""}` : "Loading…"} />
-        <Stat label="Wind" tag="OBSERVED" value={w ? <>{num(w.wind_speed)}<span className="text-[13px] text-faint"> m/s</span></> : "—"} sub={w ? `From ${compass(w.wind_direction)} (${num(w.wind_direction, 0)}°)` : ""} />
+        <Stat label="Wind" tag="OBSERVED" value={w ? <>{num(w.wind_speed)}<span className="text-[14px] text-faint"> m/s</span></> : "—"} sub={w ? `From ${compass(w.wind_direction)} (${num(w.wind_direction, 0)}°)` : ""} />
       </div>
 
       <Panel title="Timing tower" tags={["OBSERVED"]} pad={false}
@@ -86,7 +86,7 @@ export default function CommandCentre() {
           <button className="btn" aria-pressed={cont} onClick={() => setCont(!cont)} title="Show only drivers still able to win the title">Title contenders</button>
           <div role="group" aria-label="Columns" className="inline-flex rounded-full border border-line bg-white/[0.04] p-0.5">
             {[["Essentials", false], ["All columns", true]].map(([label, v]) => <button key={String(label)} onClick={() => setFull(v as boolean)} aria-pressed={full === v}
-              className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${full === v ? "bg-white/[0.16] text-ink" : "text-dim hover:text-ink"}`}>{label}</button>)}
+              className={`rounded-full px-3 py-1 text-[13px] font-medium transition-colors ${full === v ? "bg-white/[0.16] text-ink" : "text-dim hover:text-ink"}`}>{label}</button>)}
           </div>
           <button className="btn" onClick={() => exportCsv(c, rows)} title="Download the rows shown as a CSV file">↓ Export CSV</button>
         </>}
@@ -95,7 +95,7 @@ export default function CommandCentre() {
           <table className="grid-t">
             <thead><tr>
               <th>Pos</th><th>Driver</th>{full && <th>Team</th>}{full && <th className="r">Lap</th>}<th className="r">Gap</th><th className="r">Interval</th><th className="r">Last lap</th>{full && <th className="r">Best</th>}
-              <th>Tyre · age</th>{full && <th className="r">Stint</th>}<th className="r">Pits</th><th className="r">+/−</th><th className="r">Predicted finish</th>
+              <th>Tyre, age</th>{full && <th className="r">Stint</th>}<th className="r">Pits</th><th className="r">+/−</th><th className="r">Predicted finish</th>
             </tr></thead>
             <tbody>
               {rows.map((x: any) => (

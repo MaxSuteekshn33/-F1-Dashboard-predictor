@@ -8,9 +8,8 @@ export default {
         f1: "#e10600", good: "#2fbf71", warn: "#e0a100", bad: "#ff5a52", blue: "#2f7bff",
       },
       fontFamily: {
-        sans: ["Satoshi", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
-        display: ["Khand", "Satoshi", "ui-sans-serif", "system-ui", "sans-serif"],
-        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", "monospace"],
+        sans: ["Host Grotesk", "Funnel Display", "sans-serif"],
+        display: ["Funnel Display", "Host Grotesk", "sans-serif"],
       },
     },
   },

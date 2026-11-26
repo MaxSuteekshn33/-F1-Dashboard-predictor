@@ -7,12 +7,12 @@ import { OptionTable, PositionDist } from "@/components/Options";
 
 const hm = (t: number) => new Date(t * 1000).toISOString().slice(11, 16);
 const PRESETS: { key: string; label: string; what_if: any; group: string }[] = [
-  { key: "a1", group: "A · Dry → Wet", label: "Rain in 10 min (moderate, 20 min)", what_if: { rain_in_min: 10, rain_intensity: 0.5, rain_duration_min: 20 } },
-  { key: "a2", group: "A · Dry → Wet", label: "Light shower in 5 min", what_if: { rain_in_min: 5, rain_intensity: 0.25, rain_duration_min: 12 } },
-  { key: "b1", group: "B · Wet → Dry", label: "Rain stops now, track damp", what_if: { rain_stops: true, wetness: 0.45 } },
-  { key: "c1", group: "C · Disruption", label: "Sudden heavy rain now", what_if: { rain_in_min: 0, rain_intensity: 1, rain_duration_min: 15 } },
-  { key: "c2", group: "C · Disruption", label: "Track temperature +10°C", what_if: { track_temp_delta: 10 } },
-  { key: "c3", group: "C · Disruption", label: "Strong / shifting crosswind", what_if: { crosswind: true } },
+  { key: "a1", group: "A: dry to wet", label: "Rain in 10 min (moderate, 20 min)", what_if: { rain_in_min: 10, rain_intensity: 0.5, rain_duration_min: 20 } },
+  { key: "a2", group: "A: dry to wet", label: "Light shower in 5 min", what_if: { rain_in_min: 5, rain_intensity: 0.25, rain_duration_min: 12 } },
+  { key: "b1", group: "B: wet to dry", label: "Rain stops now, track damp", what_if: { rain_stops: true, wetness: 0.45 } },
+  { key: "c1", group: "C: disruption", label: "Sudden heavy rain now", what_if: { rain_in_min: 0, rain_intensity: 1, rain_duration_min: 15 } },
+  { key: "c2", group: "C: disruption", label: "Track temperature +10°C", what_if: { track_temp_delta: 10 } },
+  { key: "c3", group: "C: disruption", label: "Strong / shifting crosswind", what_if: { crosswind: true } },
 ];
 
 export default function Weather() {
@@ -41,15 +41,15 @@ export default function Weather() {
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Track / air" tag="OBSERVED" value={w ? <>{num(w.track_temperature)}°<span className="text-faint"> / </span>{num(w.air_temperature)}°</> : "—"}
-          sub={w ? `Humidity ${num(w.humidity, 0)}% · wind ${num(w.wind_speed)} m/s from ${num(w.wind_direction, 0)}°` : ""} />
+          sub={w ? `Humidity ${num(w.humidity, 0)}%, wind ${num(w.wind_speed)} m/s from ${num(w.wind_direction, 0)}°` : ""} />
         <Stat label="Rain at the track" tag="OBSERVED" value={w ? (w.rainfall ? "Raining" : "Dry") : "—"} accent={w?.rainfall ? "#3d8bf2" : undefined} sub={w ? `Sensor wet ${Math.round((w.rain_share_15min ?? 0) * 100)}% of last 15 min` : ""} />
-        <Stat label="Track wetness" tag="MODEL" value={num(px.wetness, 2)} sub={`${Math.round(px.share_on_inters * 100)}% of field on intermediates · slicks until ${d.crossover.slick_to_inter}`} />
+        <Stat label="Track wetness" tag="MODEL" value={num(px.wetness, 2)} sub={`${Math.round(px.share_on_inters * 100)}% of field on intermediates, slicks until ${d.crossover.slick_to_inter}`} />
         <Stat label="Rain probability" tag="FORECAST" value={fc.summary?.max_prob !== null && fc.summary?.max_prob !== undefined ? `${fc.summary.max_prob}%` : "—"}
-          sub={fc.summary?.first_rain_min !== null && fc.summary?.first_rain_min !== undefined ? `${fc.summary.total_mm} mm expected · first in ~${fc.summary.first_rain_min} min` : "No rain in the remaining window"} />
+          sub={fc.summary?.first_rain_min !== null && fc.summary?.first_rain_min !== undefined ? `${fc.summary.total_mm} mm expected, first in ~${fc.summary.first_rain_min} min` : "No rain in the remaining window"} />
       </div>
-      {d.forecast_observation_mismatch && <div className="rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn"><b>Forecast ≠ track.</b> {d.forecast_observation_mismatch}</div>}
+      {d.forecast_observation_mismatch && <div className="rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-[13px] text-warn"><b>Forecast ≠ track.</b> {d.forecast_observation_mismatch}</div>}
       {fc.caveat && <details className="more glass rounded-2xl px-5 py-3"><summary>About this forecast</summary>
-        <div className="pb-1 pt-2 text-[11.5px] leading-relaxed text-dim">{fc.caveat} {fc.available === false && <b className="text-warn">{fc.reason}</b>}</div></details>}
+        <div className="pb-1 pt-2 prose-body text-dim">{fc.caveat} {fc.available === false && <b className="text-warn">{fc.reason}</b>}</div></details>}
 
       <Tabs tabs={[["decision", "Decision"], ["conditions", "Conditions"], ["forecast", "Forecast"]] as [string, string][]} value={tab} onChange={setTab} />
       {tab === "decision" && (<div className="page-in space-y-5">
@@ -58,12 +58,12 @@ export default function Weather() {
         note="Pick a what-if or define your own. The scenario is recalculated automatically whenever the lap, focus driver, stored data or the track rain sensor changes.">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div className="grid gap-2 sm:grid-cols-3">
-            {["A · Dry → Wet", "B · Wet → Dry", "C · Disruption"].map((g) => (
-              <div key={g}><div className="mb-1 text-[10px] font-semibold uppercase tracking-[.12em] text-faint">{g}</div>
+            {["A: dry to wet", "B: wet to dry", "C: disruption"].map((g) => (
+              <div key={g}><div className="mb-1 text-[12px] font-semibold text-faint">{g}</div>
                 <div className="flex flex-col gap-1.5">{PRESETS.filter((p) => p.group === g).map((p) => <button key={p.key} className={`btn text-left ${wi === p.what_if ? "!border-f1" : ""}`} onClick={() => setWi(p.what_if)}>{p.label}</button>)}</div></div>))}
           </div>
-          <div className="rounded-xl border border-line bg-panel2 p-2.5 text-xs">
-            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[.12em] text-faint">Custom rain</div>
+          <div className="rounded-xl border border-line bg-panel2 p-2.5 text-[13px]">
+            <div className="mb-1.5 text-[12px] font-semibold text-faint">Custom rain</div>
             <div className="grid grid-cols-3 gap-2">
               <label className="flex flex-col gap-1 text-faint">Starts in (min)<input type="number" min={0} max={90} value={custom.rain_in_min} onChange={(e) => setCustom({ ...custom, rain_in_min: Number(e.target.value) })} /></label>
               <label className="flex flex-col gap-1 text-faint">Intensity 0–1<input type="number" min={0} max={1} step={0.05} value={custom.rain_intensity} onChange={(e) => setCustom({ ...custom, rain_intensity: Number(e.target.value) })} /></label>
@@ -75,25 +75,25 @@ export default function Weather() {
         {err && <div className="mt-2"><State error={err} /></div>}
       </Panel>
 
-      <Panel title={`Adaptive recommendation — ${d.focus_code ?? "—"}, lap ${d.lap}/${d.total_laps}${d.scenario_type ? ` · Scenario ${d.scenario_type[0]}` : ""}`} tags={d.what_if ? ["ASSUMPTION", "MODEL"] : ["FORECAST", "MODEL"]}>
+      <Panel title={`Adaptive recommendation — ${d.focus_code ?? "—"}, lap ${d.lap}/${d.total_laps}${d.scenario_type ? `, Scenario ${d.scenario_type[0]}` : ""}`} tags={d.what_if ? ["ASSUMPTION", "MODEL"] : ["FORECAST", "MODEL"]}>
         {rec ? (
           <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
             <div className="space-y-3">
-              <p className="text-[13px] leading-relaxed">{rec.text}</p>
+              <p className="prose-body">{rec.text}</p>
               <div className="grid gap-2 sm:grid-cols-2">
-                <div className="rounded-xl border border-good/40 bg-good/10 px-3 py-2"><div className="text-[10px] uppercase tracking-[.12em] text-good">Recommended action</div><div className="mt-0.5 text-sm font-semibold">{rec.recommended}</div></div>
-                <div className="rounded-xl border border-line bg-panel2 px-3 py-2"><div className="text-[10px] uppercase tracking-[.12em] text-faint">Alternative</div><div className="mt-0.5 text-sm">{rec.alternative}</div></div>
+                <div className="rounded-xl border border-good/40 bg-good/10 px-3 py-2"><div className="text-[12px] text-good">Recommended action</div><div className="mt-0.5 text-sm font-semibold">{rec.recommended}</div></div>
+                <div className="rounded-xl border border-line bg-panel2 px-3 py-2"><div className="text-[12px] text-faint">Alternative</div><div className="mt-0.5 text-sm">{rec.alternative}</div></div>
               </div>
-              <div className="num flex flex-wrap gap-x-6 gap-y-1 text-xs text-dim">
-                {rec.expected_gain_s !== undefined && <span>Expected gain vs alternative: <b className="text-ink">{rec.expected_gain_s > 0 ? "+" : ""}{rec.expected_gain_s} s</b> · <b className="text-ink">{rec.expected_gain_positions > 0 ? "+" : ""}{rec.expected_gain_positions}</b> positions</span>}
+              <div className="num flex flex-wrap gap-x-6 gap-y-1 text-[13px] text-dim">
+                {rec.expected_gain_s !== undefined && <span>Expected gain vs alternative: <b className="text-ink">{rec.expected_gain_s > 0 ? "+" : ""}{rec.expected_gain_s} s</b>, <b className="text-ink">{rec.expected_gain_positions > 0 ? "+" : ""}{rec.expected_gain_positions}</b> positions</span>}
                 {rec.crossover_lap && <span>Modelled crossover: <b className="text-ink">lap {rec.crossover_lap}</b></span>}
                 {rec.time_lost_per_lap_on_slicks_at_peak_s ? <span>Slicks at peak wetness: <b className="text-ink">+{rec.time_lost_per_lap_on_slicks_at_peak_s} s/lap</b></span> : null}
                 <span>Confidence: <Confidence c={rec.confidence} /></span>
               </div>
-              {rec.confidence?.basis && <div className="text-[11px] text-faint">Confidence basis: {rec.confidence.basis}.</div>}
+              {rec.confidence?.basis && <div className="text-[12.5px] text-faint">Confidence basis: {rec.confidence.basis}.</div>}
             </div>
-            <div className="space-y-2 text-xs">
-              <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-faint">Main risks</div>
+            <div className="space-y-2 text-[13px]">
+              <div className="text-[12px] font-semibold text-faint">Main risks</div>
               <ul className="space-y-1 text-dim">{rec.risks.map((x: string, i: number) => <li key={i}>• {x}</li>)}</ul>
               {rec.aquaplaning_risk_index !== undefined && <div className="text-dim">Aquaplaning risk index <Tag kind="MODEL" />: <b className="num text-ink">{rec.aquaplaning_risk_index}</b> <span className="text-faint">— {rec.aquaplaning_note}</span></div>}
               {rec.competitor_reaction && <div className="text-dim">Rival reaction: <span className="text-faint">{rec.competitor_reaction}</span></div>}
@@ -121,7 +121,7 @@ export default function Weather() {
               <Line dataKey="track" name="Track" stroke={SERIES[1]} strokeWidth={2} dot={false} isAnimationActive={false} /><Line dataKey="air" name="Air" stroke={SERIES[0]} strokeWidth={2} dot={false} isAnimationActive={false} />
             </LineChart></ResponsiveContainer>
           <div className="mt-2 flex h-3 w-full overflow-hidden rounded-sm bg-white/[0.08]" title="Rain sensor timeline">{d.series.map((x: any, i: number) => <div key={i} className="h-3 flex-1" style={{ background: x.rain ? "#3d8bf2" : "transparent" }} />)}</div>
-          <div className="mt-1 text-[10px] text-faint">Rain sensor timeline (blue = rain reported)</div>
+          <div className="mt-1 text-[12px] text-faint">Rain sensor timeline (blue = rain reported)</div>
         </Panel>
         <Panel title="Modelled track wetness — remaining laps" tags={["MODEL", "ASSUMPTION"]} note="Wetness 0–1 from the rain timeline (forecast or scenario). Dashed lines: slick→intermediate and intermediate→wet crossovers.">
           <ResponsiveContainer width="100%" height={230}>

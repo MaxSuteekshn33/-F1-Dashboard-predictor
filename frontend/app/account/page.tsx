@@ -22,8 +22,8 @@ function NewPassword({ email, onDone }: { email?: string; onDone: () => void }) 
   return (
     <div className="mx-auto max-w-md">
       <Panel title="Choose a new password">
-        <p className="mb-4 text-[12.5px] leading-relaxed text-dim">The reset link worked{email ? <> for <b className="text-ink">{email}</b></> : null}. Choose a new password to finish — you'll stay signed in.</p>
-        <form onSubmit={save} className="space-y-3 text-xs">
+        <p className="mb-4 prose-body text-dim">The reset link worked{email ? <> for <b className="text-ink">{email}</b></> : null}. Choose a new password to finish — you'll stay signed in.</p>
+        <form onSubmit={save} className="space-y-3 text-[13px]">
           <PasswordField label="New password" hint="at least 8 characters" value={pw} onChange={setPw} minLength={8} autoComplete="new-password" />
           <PasswordField label="Repeat new password" value={pw2} onChange={setPw2} minLength={8} autoComplete="new-password" />
           <button className="btn primary w-full" disabled={busy} aria-busy={busy}>{busy ? "Saving…" : "Save new password"}</button>
@@ -35,7 +35,7 @@ function NewPassword({ email, onDone }: { email?: string; onDone: () => void }) 
 }
 
 function Section({ title, children, note }: { title: string; children: React.ReactNode; note?: React.ReactNode }) {
-  return <Panel title={title} note={note}><div className="space-y-3 text-xs">{children}</div></Panel>;
+  return <Panel title={title} note={note}><div className="space-y-3 text-[13px]">{children}</div></Panel>;
 }
 
 function Profile({ session }: { session: Session }) {
@@ -76,7 +76,7 @@ function EmailChange({ session }: { session: Session }) {
   };
   return (
     <Section title="Email address">
-      <div className="text-dim">Signed in as <b className="text-ink">{session.user.email}</b>{pending && <> · change to <b className="text-ink">{pending}</b> waiting for confirmation</>}</div>
+      <div className="text-dim">Signed in as <b className="text-ink">{session.user.email}</b>{pending && <>, change to <b className="text-ink">{pending}</b> waiting for confirmation</>}</div>
       <form onSubmit={save} className="space-y-3">
         <label className="flex flex-col gap-1.5 text-dim">New email address<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
         <button className="btn" disabled={busy || !email.trim()} aria-busy={busy}>{busy ? "Sending…" : "Change email"}</button>
@@ -134,7 +134,7 @@ function SignOutAndDelete() {
         <button className="btn" onClick={() => supabase!.auth.signOut({ scope: "global" })} title="Signs you out on every phone and computer">Sign out everywhere</button>
       </div>
       <div className="border-t border-line pt-3">
-        <p className="mb-2 leading-relaxed text-dim">Deleting your account removes your picks and league memberships, and cannot be undone. A league you created passes to its longest-standing member; it is deleted only if you're its only member.</p>
+        <p className="mb-2 prose-body text-dim">Deleting your account removes your picks and league memberships, and cannot be undone. A league you created passes to its longest-standing member; it is deleted only if you're its only member.</p>
         <label className="flex flex-col gap-1.5 text-dim">To delete your account, type DELETE<input type="text" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="off" /></label>
         <button className="btn mt-2 border-bad/50 text-[#ffb3ae] hover:bg-bad/15" disabled={busy || confirm !== "DELETE"} onClick={del} aria-busy={busy}>{busy ? "Deleting…" : "Delete my account"}</button>
       </div>
@@ -171,7 +171,7 @@ export default function Account() {
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Your account</h1>
+        <h1 className="text-xl font-semibold">Your account</h1>
         <Link href="/play" className="btn ml-auto">Go to predictions</Link>
       </div>
       <Note msg={done} />

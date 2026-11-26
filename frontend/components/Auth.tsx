@@ -10,7 +10,7 @@ export type Msg = { ok: boolean; text: string; action?: { label: string; run: ()
 export function Note({ msg }: { msg: Msg }) {
   if (!msg) return null;
   return (
-    <div role={msg.ok ? "status" : "alert"} className={`rounded-xl border px-3 py-2 text-xs leading-relaxed ${msg.ok ? "border-good/40 bg-good/10 text-good" : "border-bad/30 bg-bad/10 text-[#ffb3ae]"}`}>
+    <div role={msg.ok ? "status" : "alert"} className={`rounded-xl border px-3 py-2 prose-body ${msg.ok ? "border-good/40 bg-good/10 text-good" : "border-bad/30 bg-bad/10 text-[#ffb3ae]"}`}>
       {msg.text}
       {msg.action && <button type="button" className="ml-1.5 font-semibold underline underline-offset-2" onClick={msg.action.run}>{msg.action.label}</button>}
     </div>
@@ -23,11 +23,11 @@ export function PasswordField({ label, value, onChange, autoComplete, minLength 
   const [show, setShow] = useState(false);
   return (
     <label className="flex flex-col gap-1.5 text-dim">
-      <span>{label}{hint && <span className="text-faint"> · {hint}</span>}</span>
+      <span>{label}{hint && <span className="text-faint">, {hint}</span>}</span>
       <span className="relative flex">
         <input type={show ? "text" : "password"} required minLength={minLength} value={value} onChange={(e) => onChange(e.target.value)} autoComplete={autoComplete}
           className="w-full pr-16" />
-        <button type="button" className="absolute inset-y-0 right-1.5 my-auto h-7 rounded-lg px-2 text-[11px] text-dim hover:bg-white/10 hover:text-ink"
+        <button type="button" className="absolute inset-y-0 right-1.5 my-auto h-7 rounded-lg px-2 text-[12.5px] text-dim hover:bg-white/10 hover:text-ink"
           onClick={() => setShow(!show)} aria-label={show ? "Hide password" : "Show password"} aria-pressed={show}>{show ? "Hide" : "Show"}</button>
       </span>
     </label>
@@ -78,20 +78,20 @@ export function Auth({ title = "Join the prediction game", intro, start = "in", 
     <div className="mx-auto max-w-md">
       <Panel title={mode === "forgot" ? "Reset your password" : title}>
         {mode === "forgot" ? (
-          <p className="mb-4 text-[12.5px] leading-relaxed text-dim">Enter the email address you signed up with. We'll send a link that lets you choose a new password.</p>
+          <p className="mb-4 prose-body text-dim">Enter the email address you signed up with. We'll send a link that lets you choose a new password.</p>
         ) : (
           <>
-            <p className="mb-4 text-[12.5px] leading-relaxed text-dim">{intro ?? "Make your picks before each race, score points when the result is in, and compare with friends in a private league. Points only — no money is involved."}</p>
+            <p className="mb-4 prose-body text-dim">{intro ?? "Make your picks before each race, score points when the result is in, and compare with friends in a private league. Points only — no money is involved."}</p>
             <div className="mb-4"><Tabs tabs={[["in", "Sign in"], ["up", "Create account"]]} value={mode} onChange={(v) => go(v as "in" | "up")} /></div>
           </>
         )}
-        <form onSubmit={submit} className="space-y-3 text-xs">
+        <form onSubmit={submit} className="space-y-3 text-[13px]">
           {mode === "up" && <label className="flex flex-col gap-1.5 text-dim">Display name (shown to your leagues)<input type="text" required minLength={2} maxLength={30} value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" /></label>}
           <label className="flex flex-col gap-1.5 text-dim">Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
           {mode !== "forgot" && <PasswordField label="Password" hint={mode === "up" ? "at least 8 characters" : undefined} value={pw} onChange={setPw} minLength={mode === "up" ? 8 : 1}
             autoComplete={mode === "in" ? "current-password" : "new-password"} />}
           {mode === "up" && <PasswordField label="Repeat password" value={pw2} onChange={setPw2} minLength={8} autoComplete="new-password" />}
-          {mode === "in" && <div className="-mt-1 text-right"><button type="button" className="text-[11.5px] text-dim underline-offset-2 hover:text-ink hover:underline" onClick={() => go("forgot")}>Forgot password?</button></div>}
+          {mode === "in" && <div className="-mt-1 text-right"><button type="button" className="text-[13px] text-dim underline-offset-2 hover:text-ink hover:underline" onClick={() => go("forgot")}>Forgot password?</button></div>}
           <button className="btn primary w-full" disabled={busy} aria-busy={busy}>
             {busy ? "Please wait…" : mode === "in" ? "Sign in" : mode === "up" ? "Create account" : "Email me a reset link"}
           </button>

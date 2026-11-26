@@ -32,7 +32,7 @@ function TrackMap({ data, focus }: { data: any; focus: number | null }) {
 function Trace({ pts, ch, title, traces, unit, domain, h = 130 }: any) {
   return (
     <div>
-      <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-[.12em] text-faint">{title}{unit && <span className="normal-case tracking-normal">({unit})</span>}</div>
+      <div className="mb-1 flex items-center gap-2 text-[12px] text-faint">{title}{unit && <span className="normal-case tracking-normal">({unit})</span>}</div>
       <ResponsiveContainer width="100%" height={h}>
         <LineChart data={pts} syncId="tel" margin={{ top: 4, right: 8, bottom: 0, left: -8 }}>
           <CartesianGrid stroke={GRID} vertical={false} />
@@ -89,16 +89,16 @@ export default function Telemetry() {
   }, [sel, byNum]);
   const A = sel.d1 ? byNum[sel.d1] : null;
   const B = sel.d2 && sel.d2 !== sel.d1 ? byNum[sel.d2] : null;
-  const lapOpts = (d?: any) => (d?.laps || []).filter((x: any) => x.t).map((x: any) => <option key={x.lap} value={x.lap}>L{x.lap} · {fmtLap(x.t)} · {x.compound?.[0] || "?"}{x.pit ? " · pit" : ""}</option>);
+  const lapOpts = (d?: any) => (d?.laps || []).filter((x: any) => x.t).map((x: any) => <option key={x.lap} value={x.lap}>L{x.lap}, {fmtLap(x.t)}, {x.compound?.[0] || "?"}{x.pit ? ", pit" : ""}</option>);
   return (
     <div className="space-y-5">
       <Tabs tabs={[["track", "Track & sectors"], ["telemetry", "Telemetry"], ["pace", "Laps & pace"]] as [string, string][]} value={tab} onChange={setTab} />
       {tab === "track" && (<div className="page-in space-y-5">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <Panel title="Circuit map & car positions" tags={["OBSERVED"]} note={map?.available ? <>Outline drawn from car #{map.outline_ref}. Sectors: <span style={{ color: SECTOR[0] }}>S1</span> · <span style={{ color: SECTOR[1] }}>S2</span> · <span style={{ color: SECTOR[2] }}>S3</span>. Positions at the end of lap {map.lap}. {map.limitations?.[0]}</> : undefined}>
+        <Panel title="Circuit map & car positions" tags={["OBSERVED"]} note={map?.available ? <>Outline drawn from car #{map.outline_ref}. Sectors: <span style={{ color: SECTOR[0] }}>S1</span>, <span style={{ color: SECTOR[1] }}>S2</span>, <span style={{ color: SECTOR[2] }}>S3</span>. Positions at the end of lap {map.lap}. {map.limitations?.[0]}</> : undefined}>
           <State loading={mapLoading} error={mapErr} empty={map && !map.available ? map.reason : null}>{map?.available && <TrackMap data={streaming ? { ...map, cars: liveCars.cars } : map} focus={r.driver} />}</State>
-          {streaming && <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-good"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-good" />Live positions from the real-time stream, refreshed every 2 s</div>}
-          {map?.note && <div className="mt-2 text-[11px] text-warn">{map.note}</div>}
+          {streaming && <div className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] text-good"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-good" />Live positions from the real-time stream, refreshed every 2 s</div>}
+          {map?.note && <div className="mt-2 text-[12.5px] text-warn">{map.note}</div>}
         </Panel>
         <Panel title="Sector times — last completed lap" tags={["OBSERVED"]} pad={false}>
           <State error={lapErr} empty={laps && !laps.available ? laps.reason : null}>
@@ -122,7 +122,7 @@ export default function Telemetry() {
           <button className="btn" onClick={() => preset("leader")}>vs leader</button>
           <button className="btn" onClick={() => preset("stints")}>First vs last stint</button>
         </>}>
-        <div className="mb-3 flex flex-wrap items-center gap-3 text-xs">
+        <div className="mb-3 flex flex-wrap items-center gap-3 text-[13px]">
           {(["1", "2"] as const).map((k, i) => (
             <div key={k} className="flex items-center gap-2">
               <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: SERIES[i] }} />
@@ -138,8 +138,8 @@ export default function Telemetry() {
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {tel.traces.map((t: any, i: number) => (
                   <div key={t.key} className="col-span-2 rounded-2xl border border-line bg-panel2 px-3 py-2">
-                    <div className="flex items-center gap-2 text-xs"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: SERIES[i] }} /><b>{t.code}</b><span className="text-dim">lap {t.lap}</span><span className="num ml-auto text-sm font-semibold">{fmtLap(t.lap_time)}</span></div>
-                    <div className="num mt-1 grid grid-cols-3 gap-x-3 text-[11px] text-dim xl:grid-cols-6">
+                    <div className="flex items-center gap-2 text-[13px]"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: SERIES[i] }} /><b>{t.code}</b><span className="text-dim">lap {t.lap}</span><span className="num ml-auto text-sm font-semibold">{fmtLap(t.lap_time)}</span></div>
+                    <div className="num mt-1 grid grid-cols-3 gap-x-3 text-[12.5px] text-dim xl:grid-cols-6">
                       <span>Top {t.top_speed} km/h</span><span>Full thr. {t.full_throttle_pct}%</span><span>Braking {t.brake_pct}%</span><span>{t.gear_changes} shifts</span><span>Max {t.max_rpm} rpm</span><span>DRS {t.drs_pct}%</span>
                     </div>
                   </div>
@@ -148,7 +148,7 @@ export default function Telemetry() {
               <Trace pts={tel.points} ch="speed" title="Speed" unit="km/h" traces={tel.traces} h={190} />
               {tel.traces.length === 2 && (
                 <div>
-                  <div className="mb-1 text-[10px] uppercase tracking-[.12em] text-faint">Time delta ({tel.traces[1].code} L{tel.traces[1].lap} − {tel.traces[0].code} L{tel.traces[0].lap}, s) — above zero = second trace slower</div>
+                  <div className="mb-1 text-[12px] text-faint">Time delta ({tel.traces[1].code} L{tel.traces[1].lap} − {tel.traces[0].code} L{tel.traces[0].lap}, s) — above zero = second trace slower</div>
                   <ResponsiveContainer width="100%" height={110}>
                     <LineChart data={tel.points} syncId="tel" margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
                       <CartesianGrid stroke={GRID} vertical={false} /><XAxis dataKey="d" type="number" domain={[0, "dataMax"]} tickFormatter={(v) => `${Math.round(v)}m`} tickLine={false} axisLine={{ stroke: GRID }} />

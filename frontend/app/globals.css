@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------- type
-   Satoshi (interface, body, numbers) and Khand, a condensed signage face (page titles, headline numbers), both from
-   Fontshare under the ITF Free Font License, bundled in /public/fonts so they load with the page. */
-@font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-@font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
-@font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-700.woff2") format("woff2"); font-weight: 600 700; font-display: swap; }
-@font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-900.woff2") format("woff2"); font-weight: 800 900; font-display: swap; }
-@font-face { font-family: "Khand"; src: url("/fonts/Khand-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
-@font-face { font-family: "Khand"; src: url("/fonts/Khand-600.woff2") format("woff2"); font-weight: 600; font-display: swap; }
-@font-face { font-family: "Khand"; src: url("/fonts/Khand-700.woff2") format("woff2"); font-weight: 700 900; font-display: swap; }
+   Two families only: Funnel Display for headings and headline numbers, Host Grotesk for everything else.
+   Both are open-licensed (SIL OFL) variable fonts, self-hosted in /public/fonts.
+   Rules: headings weight 600, letter-spacing -0.02em. Reading text 17px / 1.5, at most 75 characters per line
+   (.prose-body). Tables and compact data are smaller (14px). Numbers, dates and labels keep the text face and
+   use tabular figures. No capitalised label above a heading, no middle dots between details. */
+@font-face { font-family: "Funnel Display"; src: url("/fonts/FunnelDisplay-latin.woff2") format("woff2"); font-weight: 300 800; font-display: swap; unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Funnel Display"; src: url("/fonts/FunnelDisplay-latin-ext.woff2") format("woff2"); font-weight: 300 800; font-display: swap; unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: "Host Grotesk"; src: url("/fonts/HostGrotesk-latin.woff2") format("woff2"); font-weight: 300 800; font-display: swap; unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "Host Grotesk"; src: url("/fonts/HostGrotesk-latin-ext.woff2") format("woff2"); font-weight: 300 800; font-display: swap; unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
 
 /* ---------------------------------------------------------------- palette
    Racing red, carbon, grey, white and a single blue. Surfaces are solid: no blur, no glow behind content. */
@@ -22,11 +22,11 @@
   --bg: #0e0e15; --carbon: #15151e; --card: #1a1a24; --card-2: #22222d; --card-3: #2a2a36;
   --hair: rgba(255,255,255,.08); --hair-2: rgba(255,255,255,.16);
   --ink: #ffffff; --dim: #bcbcc8; --faint: #8f8f9d;
-  --display: "Khand", "Satoshi", ui-sans-serif, system-ui, sans-serif;
+  --display: "Funnel Display", "Host Grotesk", sans-serif; --body: "Host Grotesk", "Funnel Display", sans-serif;
 }
 html { scroll-behavior: smooth; scroll-padding-top: 84px; background: var(--bg); }
 html, body { color: var(--ink); }
-body { background: var(--bg); position: relative; z-index: 0; min-height: 100vh; -webkit-font-smoothing: antialiased; font-feature-settings: "tnum" 1; }
+body { font-family: var(--body); background: var(--bg); position: relative; z-index: 0; min-height: 100vh; -webkit-font-smoothing: antialiased; font-feature-settings: "tnum" 1; }
 /* carbon weave: a texture you feel more than see */
 body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
@@ -36,9 +36,12 @@ body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-even
 /* the red line along the top of every page */
 body::after { content: ""; position: fixed; inset: 0 0 auto 0; height: 3px; z-index: 60; pointer-events: none; background: linear-gradient(90deg, var(--red) 0%, var(--red-hi) 55%, var(--red) 100%); }
 
-h1 { font-family: var(--display); font-weight: 600; letter-spacing: .005em; line-height: 1.05; font-size: clamp(28px, 3.3vw, 38px) !important; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: -0.02em; }
+h1 { line-height: 1.1; font-size: clamp(26px, 3vw, 36px) !important; }
+/* reading text: descriptions, notes, explanations */
+.prose-body { font-size: 17px; line-height: 1.5; max-width: 75ch; }
 .display { font-family: var(--display); }
-.eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--red-hi); }
+.eyebrow { font-size: 14px; font-weight: 500; color: var(--dim); }
 
 /* ---------------------------------------------------------------- cards
    The card shape: square corners with one rounded top-right corner, edged along the top and right. `.glass` is
@@ -52,11 +55,11 @@ h1 { font-family: var(--display); font-weight: 600; letter-spacing: .005em; line
   border-top-color: var(--red) !important; border-right-color: var(--red) !important; }
 .card-accent { border-top-color: var(--red) !important; border-right-color: var(--red) !important; }
 
-.num { font-family: "Satoshi", ui-sans-serif, system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.num { font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------- tables: timing-screen style */
-table.grid-t { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
-table.grid-t th { text-align: left; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .1em; font-size: 10px;
+table.grid-t { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+table.grid-t th { text-align: left; font-weight: 600; color: var(--faint); font-size: 12.5px;
   padding: 10px 12px; border-bottom: 1px solid var(--hair-2); white-space: nowrap; position: sticky; top: 0; z-index: 1; background: var(--card); }
 table.grid-t td { padding: 9px 12px; border-bottom: 1px solid var(--hair); white-space: nowrap; transition: background .15s; }
 table.grid-t tr:last-child td { border-bottom: 0; }
@@ -67,7 +70,7 @@ table.grid-t td.r, table.grid-t th.r { text-align: right; }
 /* ---------------------------------------------------------------- form controls */
 input[type=range] { accent-color: var(--red); height: 4px; }
 select, input[type=number], input[type=text], input[type=email], input[type=password] { background: var(--card-2); border: 1px solid var(--hair-2); border-radius: 6px; padding: 6px 10px;
-  font-size: 12.5px; color: var(--ink); outline: none; transition: border-color .15s, background .15s; font-family: inherit; }
+  font-size: 14px; color: var(--ink); outline: none; transition: border-color .15s, background .15s; font-family: inherit; }
 select:hover, input[type=number]:hover, input[type=text]:hover, input[type=email]:hover, input[type=password]:hover { background: var(--card-3); }
 select:focus, input:focus { border-color: rgba(255,255,255,.5); }
 select option { background: var(--carbon); color: var(--ink); }
@@ -84,12 +87,12 @@ label:has(> input[type=checkbox]) { cursor: pointer; }
 .btn { --g1: #44444f; --g2: #23232c; --glow: rgba(160,160,180,.35);
   position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; white-space: nowrap; text-decoration: none; cursor: pointer;
   background: linear-gradient(135deg, var(--g1) 0%, var(--g2) 100%); background-size: 160% 160%; background-position: 0% 0%;
-  border: 1px solid rgba(255,255,255,.14); border-radius: 999px; padding: 6px 15px; font-size: 12.5px; font-weight: 700; letter-spacing: .01em; line-height: 1.2; color: #fff;
+  border: 1px solid rgba(255,255,255,.14); border-radius: 999px; padding: 6px 15px; font-size: 14px; font-weight: 600; line-height: 1.2; color: #fff;
   transition: background-position .45s ease, box-shadow .3s ease, transform .08s, border-color .2s, filter .2s; }
 .btn:hover { background-position: 100% 100%; border-color: rgba(255,255,255,.3); box-shadow: 0 10px 24px -10px var(--glow); filter: brightness(1.08); }
 .btn:active { transform: scale(.97); }
 .btn.primary { --g1: #ff3a22; --g2: #a30000; --glow: rgba(225,6,0,.75); background-image: linear-gradient(135deg, var(--g1) 0%, var(--red) 45%, var(--g2) 100%);
-  border-color: rgba(255,255,255,.2); padding: 7px 20px; min-height: 36px; font-size: 13px; }
+  border-color: rgba(255,255,255,.2); padding: 7px 20px; min-height: 38px; font-size: 15px; }
 a.btn:not(.primary):not(.light):not(.quiet), .btn.blue { --g1: #4c90ff; --g2: var(--blue-lo); --glow: rgba(47,123,255,.6); border-color: rgba(255,255,255,.18); }
 .btn.light { --g1: #ffffff; --g2: #c4c6cf; --glow: rgba(255,255,255,.35); color: var(--carbon); border-color: transparent; }
 .btn.quiet { background: transparent; border-color: transparent; color: var(--dim); box-shadow: none; }
@@ -103,7 +106,7 @@ a.btn:not(.primary):not(.light):not(.quiet), .btn.blue { --g1: #4c90ff; --g2: va
 .skip-link { position: fixed; left: 12px; top: -60px; z-index: 70; transition: top .15s; }
 .skip-link:focus { top: 12px; }
 
-details.more > summary { cursor: pointer; list-style: none; user-select: none; color: var(--faint); font-size: 11px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+details.more > summary { cursor: pointer; list-style: none; user-select: none; color: var(--faint); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
 details.more > summary::-webkit-details-marker { display: none; }
 details.more > summary::before { content: "›"; display: inline-block; transition: transform .15s; font-size: 13px; line-height: 1; color: var(--red-hi); }
 details.more[open] > summary::before { transform: rotate(90deg); }
@@ -115,8 +118,8 @@ details.more > summary:hover { color: var(--ink); }
 .skeleton { border-radius: 3px; background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.09) 37%, rgba(255,255,255,.04) 63%); background-size: 800px 100%; animation: shimmer 1.4s linear infinite; }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 8px; } ::-webkit-scrollbar-track { background: transparent; }
-.recharts-cartesian-axis-tick-value { fill: var(--faint); font-size: 10px; font-family: "Satoshi", sans-serif; }
-.recharts-legend-item-text { color: var(--dim) !important; font-size: 11px; }
+.recharts-cartesian-axis-tick-value { fill: var(--faint); font-size: 12px; font-family: "Host Grotesk", sans-serif; }
+.recharts-legend-item-text { color: var(--dim) !important; font-size: 13px; }
 
 /* visible keyboard focus on every control (never removed, only restyled) */
 :focus-visible { outline: 2px solid #8cb8ff; outline-offset: 2px; border-radius: 4px; }

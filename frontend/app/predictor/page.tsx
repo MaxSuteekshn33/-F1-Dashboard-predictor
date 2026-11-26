@@ -10,7 +10,7 @@ function Explain({ items }: { items: any[] }) {
   return (
     <div className="space-y-1">
       {items.map((x, i) => (
-        <div key={i} className="grid grid-cols-[minmax(0,1fr)_90px_44px] items-center gap-2 text-[11px]">
+        <div key={i} className="grid grid-cols-[minmax(0,1fr)_90px_44px] items-center gap-2 text-[12.5px]">
           <span className="truncate text-dim" title={x.label}>{x.label}{x.value !== null && <span className="num text-faint"> = {x.value}</span>}</span>
           <div className="relative h-2 rounded-sm bg-white/[0.08]">
             <div className="absolute top-0 h-2 rounded-sm" style={{ left: x.shap >= 0 ? "50%" : `${50 - (Math.abs(x.shap) / max) * 50}%`, width: `${(Math.abs(x.shap) / max) * 50}%`, background: x.shap >= 0 ? "#3987e5" : "#d95926" }} />
@@ -76,10 +76,10 @@ export default function Predictor() {
                   <TopFive rows={ir.top5} colourKey="team_colour" ci={(d) => [d.range_lo, d.range_hi]} />
                 </Panel>
                 <Panel title="How this is calculated" tags={["MODEL", "ASSUMPTION"]}>
-                  <ul className="space-y-1.5 text-xs leading-relaxed text-dim">
+                  <ul className="space-y-1.5 prose-body text-dim">
                     <li><b className="text-ink">Win / podium:</b> {ir.method.p_win}.</li>
                     <li><b className="text-ink">Leakage control:</b> {ir.method.leakage}.</li>
-                    <li><b className="text-ink">Simulation inputs:</b> {ir.n_sims} runs · pit loss {ir.sim_inputs.pit_loss_s} s ({ir.sim_inputs.pit_loss_source}) · SC {(ir.sim_inputs.sc_per_lap * 100).toFixed(1)}%/lap, VSC {(ir.sim_inputs.vsc_per_lap * 100).toFixed(1)}%/lap ({ir.sim_inputs.hazard_source}) · retirement {(ir.sim_inputs.dnf_per_race * 100).toFixed(0)}%/race.</li>
+                    <li><b className="text-ink">Simulation inputs:</b> {ir.n_sims} runs, pit loss {ir.sim_inputs.pit_loss_s} s ({ir.sim_inputs.pit_loss_source}), SC {(ir.sim_inputs.sc_per_lap * 100).toFixed(1)}%/lap, VSC {(ir.sim_inputs.vsc_per_lap * 100).toFixed(1)}%/lap ({ir.sim_inputs.hazard_source}), retirement {(ir.sim_inputs.dnf_per_race * 100).toFixed(0)}%/race.</li>
                     <li><b className="text-ink">Fastest lap:</b> {ir.method.fastest_lap}.</li>
                     <li><b className="text-ink">Model version:</b> <span className="num">{ir.model_version ?? "not trained"}</span>. Recalculated every time the lap or the stored timing data changes.</li>
                   </ul>
@@ -111,8 +111,8 @@ export default function Predictor() {
             <div className="space-y-5">
               <div className="flex flex-wrap items-baseline gap-3">
                 <h1 className="text-xl font-semibold">{pr.race.year} {pr.race.gp_name}</h1>
-                <span className="text-xs text-dim">Round {pr.race.round} · {pr.race.circuit_name} · {pr.race.date}</span>
-                <span className="text-xs text-faint">Model: {pr.variant === "pre_race" ? "post-qualifying (uses the grid)" : "pre-qualifying (no grid yet)"} · v{pr.model_version} · trained through {pr.train_through}</span>
+                <span className="text-[13px] text-dim">Round {pr.race.round}, {pr.race.circuit_name}, {pr.race.date}</span>
+                <span className="text-[13px] text-faint">Model: {pr.variant === "pre_race" ? "post-qualifying (uses the grid)" : "pre-qualifying (no grid yet)"}, v{pr.model_version}, trained through {pr.train_through}</span>
               </div>
               <div className="grid gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
                 <Panel title="Five most likely winners" tags={["MODEL"]} note="Whiskers: 95% Wilson interval of how often drivers given a probability in this band actually won in the walk-forward backtest.">
@@ -139,7 +139,7 @@ export default function Predictor() {
                       <td className="r num">{num(d.exp_points)}</td><td className="r num text-dim">{num(d.points_before, 0)}</td><td className="r num">{num(d.projected_points)}</td><td className="r num text-dim">{signed(d.exp_points_vs_top)}</td>
                     </tr>
                     {open === d.driver_id && <tr key={`${d.driver_id}x`}><td colSpan={14} className="!bg-white/[0.04]"><div className="grid max-w-3xl gap-4 py-1 md:grid-cols-2"><Explain items={d.explain} />
-                      <div className="text-[11px] text-dim">Per-model win probability:<div className="num mt-1 grid grid-cols-2 gap-x-4">{Object.entries(d.model_spread || {}).map(([k, v]: any) => <span key={k}>{k}: {pct(v)}</span>)}</div></div></div></td></tr>}
+                      <div className="text-[12.5px] text-dim">Per-model win probability:<div className="num mt-1 grid grid-cols-2 gap-x-4">{Object.entries(d.model_spread || {}).map(([k, v]: any) => <span key={k}>{k}: {pct(v)}</span>)}</div></div></div></td></tr>}
                   </>))}</tbody>
                 </table></div>
               </Panel>

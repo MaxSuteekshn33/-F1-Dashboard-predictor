@@ -14,7 +14,7 @@ export default function Analytics() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3"><h1 className="text-xl font-semibold">{d.year} season</h1>
-        <select value={year ?? d.year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Season">{(ov.data?.seasons || [d.year]).map((y: number) => <option key={y}>{y}</option>)}</select>{loading && <span className="animate-pulse text-xs text-faint">loading…</span>}</div>
+        <select value={year ?? d.year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Season">{(ov.data?.seasons || [d.year]).map((y: number) => <option key={y}>{y}</option>)}</select>{loading && <span className="animate-pulse text-[13px] text-faint">loading…</span>}</div>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <Panel title="Constructors" tags={["OBSERVED"]} pad={false}>
           <div className="overflow-auto"><table className="grid-t"><thead><tr><th>Constructor</th><th style={{ width: 170 }}>Points</th><th className="r">Wins</th><th className="r">Podiums</th><th className="r">Avg quali</th><th className="r">Avg finish</th><th className="r">DNF rate</th><th className="r">Mechanical DNF</th><th className="r">Pit lane (median)</th><th className="r">Speed trap</th></tr></thead>
@@ -28,7 +28,7 @@ export default function Analytics() {
               <CartesianGrid stroke={GRID} /><XAxis type="number" dataKey="avg_quali" name="Avg qualifying" domain={[0, 22]} tickLine={false} axisLine={{ stroke: GRID }} label={{ value: "Average qualifying position", position: "insideBottom", offset: -10, fill: "#6b717d", fontSize: 10 }} />
               <YAxis type="number" dataKey="avg_finish" name="Avg finish" domain={[0, 22]} tickLine={false} axisLine={false} width={52} label={{ value: "Average finish", angle: -90, position: "insideLeft", offset: 22, fill: "#6b717d", fontSize: 10 }} /><ZAxis range={[70, 70]} />
               <ReferenceLine segment={[{ x: 0, y: 0 }, { x: 22, y: 22 }]} stroke="#3a3f48" strokeDasharray="4 4" />
-              <Tooltip cursor={{ strokeDasharray: "3 3" }} content={({ active, payload }: any) => active && payload?.length ? <div className="glass-strong rounded-xl px-3 py-2 text-[11px]"><b>{payload[0].payload.name}</b><div className="num text-dim">quali {num(payload[0].payload.avg_quali)} · finish {num(payload[0].payload.avg_finish)}</div></div> : null} />
+              <Tooltip cursor={{ strokeDasharray: "3 3" }} content={({ active, payload }: any) => active && payload?.length ? <div className="glass-strong rounded-xl px-3 py-2 text-[12.5px]"><b>{payload[0].payload.name}</b><div className="num text-dim">quali {num(payload[0].payload.avg_quali)}, finish {num(payload[0].payload.avg_finish)}</div></div> : null} />
               <Scatter data={qr} isAnimationActive={false}>{qr.map((x: any, i: number) => <Cell key={i} fill={teamColour(x.colour)} stroke="#0b0c10" strokeWidth={2} />)}<LabelList dataKey="code" position="top" fill="#a3a8b3" fontSize={9} /></Scatter>
             </ScatterChart></ResponsiveContainer>
         </Panel>

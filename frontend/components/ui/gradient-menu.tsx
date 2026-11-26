@@ -43,7 +43,7 @@ export default function GradientMenu({ items, active, size = "md", className = "
               {/* icon */}
               <span className={`relative z-10 text-[#bcbcc8] transition-all duration-500 group-hover:scale-0 group-focus-visible:scale-0 [&>svg]:h-[22px] [&>svg]:w-[22px] ${on ? "scale-0" : ""}`} aria-hidden>{icon}</span>
               {/* title */}
-              <span className={`absolute whitespace-nowrap text-[12px] font-bold uppercase tracking-[.12em] transition-all delay-150 duration-500 group-hover:scale-100 group-focus-visible:scale-100 ${on ? "scale-100" : "scale-0"}`}
+              <span className={`absolute whitespace-nowrap text-[14px] font-semibold transition-all delay-150 duration-500 group-hover:scale-100 group-focus-visible:scale-100 ${on ? "scale-100" : "scale-0"}`}
                 style={{ color: "var(--gm-ink)" }}>{title}</span>
             </Link>
           </li>

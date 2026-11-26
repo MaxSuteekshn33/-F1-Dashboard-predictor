@@ -10,7 +10,7 @@ function Stints({ stints, total, lap, plan }: { stints: any[]; total: number; la
   return (
     <div className="relative h-5 w-full rounded-sm bg-white/[0.08]">
       {stints.map((s, i) => (
-        <div key={i} className="absolute top-0 flex h-5 items-center justify-center rounded-sm text-[9px] font-bold text-black" title={`${s.compound} laps ${s.from}–${s.to}`}
+        <div key={i} className="absolute top-0 flex h-5 items-center justify-center rounded-sm text-[11px] font-bold text-black" title={`${s.compound} laps ${s.from}–${s.to}`}
           style={{ left: `${((s.from - 1) / total) * 100}%`, width: `calc(${w(s.from, s.to)} - 2px)`, background: COMPOUND[s.compound]?.c || "#6b717d", opacity: s.future ? 0.45 : 1 }}>{COMPOUND[s.compound]?.l}</div>
       ))}
       <div className="absolute top-[-3px] h-[26px] w-px bg-white" style={{ left: `${(lap / total) * 100}%` }} />
@@ -53,14 +53,14 @@ export default function Strategy() {
       <Tabs tabs={[["plan", "Strategy plan"], ["tyres", "Tyres & rivals"], ["stints", "Stint history"]] as [string, string][]} value={tab} onChange={setTab} />
       {tab === "plan" && (<div className="page-in space-y-5">
       <Panel title={`Strategy options for ${s.focus_code ?? "—"} from lap ${s.lap}`} tags={["MODEL"]} pad={false} note={<>{s.method} {s.n_sims ? `${s.n_sims} simulations per option${s.engine === "browser" ? ", run in your browser" : ""}, same random futures for each.` : ""} “Model Δ” is the optimiser's deterministic time; “Sim Δ” includes traffic, incidents and rivals' stops.</>}>
-        {plansPending && <div className="px-5 pb-5"><div className="mb-2 text-[11.5px] text-dim">Optimising stop laps and simulating each plan across the field…</div><State loading /></div>}
+        {plansPending && <div className="px-5 pb-5"><div className="mb-2 text-[13px] text-dim">Optimising stop laps and simulating each plan across the field…</div><State loading /></div>}
         {pl.error && !fresh && <div className="px-5 pb-5"><State error={`Strategy plans: ${pl.error}`} /></div>}
         <div className={`overflow-auto ${plansPending || (pl.error && !fresh) ? "hidden" : ""}`}><table className="grid-t">
           <thead><tr><th></th><th>Strategy</th><th>Stops (lap → tyre)</th><th style={{ minWidth: 260 }}>Stints</th><th className="r">Next stop</th><th className="r">Pit time lost</th><th className="r">Tyre wear cost</th><th className="r">Model Δ</th><th className="r">Sim Δ</th><th className="r">Exp. finish</th><th className="r">P10–P90</th><th className="r">Win</th><th className="r">Podium</th><th className="r">Laps in traffic</th></tr></thead>
           <tbody>{s.strategies.map((x: any) => (
             <tr key={x.label} className={x.recommended ? "!bg-good/10" : ""} style={{ opacity: x.rule_ok ? 1 : 0.5 }}>
               <td className="num font-bold">{x.label}</td>
-              <td className="font-semibold">{x.name}{x.recommended && <span className="ml-2 rounded bg-good px-1.5 py-[1px] text-[9px] font-bold text-black">RECOMMENDED</span>}{!x.rule_ok && <span className="ml-2 text-[10px] text-bad">breaks 2-compound rule</span>}</td>
+              <td className="font-semibold">{x.name}{x.recommended && <span className="ml-2 rounded bg-good px-1.5 py-[1px] text-[11px] font-bold text-black">RECOMMENDED</span>}{!x.rule_ok && <span className="ml-2 text-[12px] text-bad">breaks 2-compound rule</span>}</td>
               <td>{x.plan.length ? x.plan.map((p: any, i: number) => <span key={i} className="mr-2 inline-flex items-center gap-1"><span className="num">L{p.lap}</span><Tyre compound={p.compound} /></span>) : <span className="text-faint">none</span>}</td>
               <td><Stints total={s.total_laps} lap={s.lap} stints={[...mine.map((m: any) => ({ ...m })), ...x.stints.filter((t: any) => t.from_lap > s.lap || t.to_lap > s.lap).map((t: any) => ({ compound: t.compound, from: Math.max(t.from_lap, s.lap + 1), to: t.to_lap, future: true }))]} /></td>
               <td className="r num">{x.recommended_pit_lap ? `L${x.recommended_pit_lap}` : "—"}</td><td className="r num">{num(x.pit_time_lost)} s</td><td className="r num">{num(x.deg_time)} s</td>
@@ -98,7 +98,7 @@ export default function Strategy() {
       <div className="grid gap-5 xl:grid-cols-3">
         <Panel title="Fitted tyre model" tags={["MODEL"]} pad={false} note={tm.base_source}>
           <table className="grid-t"><thead><tr><th>Compound</th><th className="r">Wear</th><th className="r">Pace offset</th><th className="r">Laps</th><th>Basis</th></tr></thead>
-            <tbody>{["SOFT", "MEDIUM", "HARD"].map((c) => { const x = tm.compounds[c]; return <tr key={c}><td><Tyre compound={c} /> <span className="ml-1">{c}</span></td><td className="r num">{signed(x.deg, 3)} s/lap</td><td className="r num">{signed(x.offset, 2)} s</td><td className="r num">{x.n_laps}</td><td className="whitespace-normal text-[11px] text-dim">{x.source}</td></tr>; })}</tbody></table>
+            <tbody>{["SOFT", "MEDIUM", "HARD"].map((c) => { const x = tm.compounds[c]; return <tr key={c}><td><Tyre compound={c} /> <span className="ml-1">{c}</span></td><td className="r num">{signed(x.deg, 3)} s/lap</td><td className="r num">{signed(x.offset, 2)} s</td><td className="r num">{x.n_laps}</td><td className="whitespace-normal text-[12.5px] text-dim">{x.source}</td></tr>; })}</tbody></table>
         </Panel>
         <Panel title="Undercut / overcut screen" tags={["OBSERVED", "MODEL"]} pad={false} note="Pairs of cars within 4 s on slick tyres. Margin = modelled two-lap fresh-tyre gain minus the gap.">
           <State empty={!s.undercuts.length ? "No pairs within undercut range on slick tyres at this lap." : null}>
@@ -108,7 +108,7 @@ export default function Strategy() {
           </State>
         </Panel>
         <Panel title="Competitor pit windows" tags={["MODEL"]} pad={false} note="Each rival's own time-optimal next stop from the same optimiser.">
-          <div className="max-h-[260px] overflow-auto"><table className="grid-t"><thead><tr><th>Pos</th><th>Driver</th><th>Tyre · age</th><th className="r">Next stop</th><th>Onto</th></tr></thead>
+          <div className="max-h-[260px] overflow-auto"><table className="grid-t"><thead><tr><th>Pos</th><th>Driver</th><th>Tyre, age</th><th className="r">Next stop</th><th>Onto</th></tr></thead>
             <tbody>{s.competitors.map((c: any) => <tr key={c.driver_number} className={c.driver_number === s.focus ? "!bg-white/[0.07]" : ""}><td className="num">{c.position}</td><td className="font-semibold">{c.code}</td><td><Tyre compound={c.compound} age={c.tyre_age} /></td><td className="r num">{c.next_stop ? `L${c.next_stop}` : "—"}</td><td><Tyre compound={c.next_compound} /></td></tr>)}</tbody></table></div>
         </Panel>
       </div>
@@ -116,7 +116,7 @@ export default function Strategy() {
       {tab === "stints" && (<div className="page-in space-y-5">
       <Panel title="Stint history — all cars" tags={["OBSERVED"]}>
         <div className="space-y-1">{s.drivers.map((d: any) => (
-          <div key={d.driver_number} className="grid grid-cols-[28px_44px_minmax(0,1fr)] items-center gap-2 text-xs"><span className="num text-faint">{d.position}</span><Driver code={d.code} colour={d.team_colour} />
+          <div key={d.driver_number} className="grid grid-cols-[28px_44px_minmax(0,1fr)] items-center gap-2 text-[13px]"><span className="num text-faint">{d.position}</span><Driver code={d.code} colour={d.team_colour} />
             <Stints total={s.total_laps} lap={s.lap} stints={s.stints.filter((x: any) => x.driver_number === d.driver_number)} /></div>))}</div>
       </Panel>
       </div>)}

@@ -9,11 +9,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <link rel="preload" href="/fonts/Satoshi-500.woff2" as="font" type="font/woff2" crossOrigin="" />
-        <link rel="preload" href="/fonts/Khand-600.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/fonts/HostGrotesk-latin.woff2" as="font" type="font/woff2" crossOrigin="" />
+        <link rel="preload" href="/fonts/FunnelDisplay-latin.woff2" as="font" type="font/woff2" crossOrigin="" />
         <meta name="theme-color" content="#15151e" />
       </head>
-      <body className="font-sans text-[13.5px]">
+      <body className="font-sans text-[15px]">
         <RaceProvider><Shell>{children}</Shell></RaceProvider>
       </body>
     </html>

@@ -44,19 +44,19 @@ export default function NextRace() {
       <section className="glass card-hero overflow-hidden">
         <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-end">
           <div>
-            <div className="eyebrow">Next race · {race.year} round {race.round}</div>
-            <h1 className="mt-1.5 text-[30px] font-semibold leading-tight tracking-tight">{race.gp_name}</h1>
-            <div className="mt-1 text-[13px] text-dim">{c.full_name} · {c.place_name} · {c.laps} laps · {num(c.course_length, 3)} km · {String(c.circuit_type).toLowerCase()} circuit</div>
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px]">
+            <h1 className="text-[30px] font-semibold leading-tight">{race.gp_name}</h1>
+            <div className="eyebrow mt-1.5">Next race, {race.year} round {race.round}</div>
+            <div className="mt-1 text-[14px] text-dim">{c.full_name}, {c.place_name}, {c.laps} laps, {num(c.course_length, 3)} km, {String(c.circuit_type).toLowerCase()} circuit</div>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-[13px]">
               <span className="border border-white/10 bg-[#22222d] [border-radius:2px_10px_2px_2px] px-3 py-1.5 text-dim">Lights out <b className="text-ink">{dt(d.start)}</b></span>
               <span className="border border-white/10 bg-[#22222d] [border-radius:2px_10px_2px_2px] px-3 py-1.5 text-dim">{d.grid_known ? <>Grid: <b className="text-ink">set</b> — post-qualifying model</> : <>Qualifying <b className="text-ink">{c.qualifying_date ?? "—"}</b> — predictions update once the grid is known</>}</span>
               {c.sprint_race_date && <span className="border border-white/10 bg-[#22222d] [border-radius:2px_10px_2px_2px] px-3 py-1.5 text-dim">Sprint weekend</span>}
             </div>
           </div>
           <div className="lg:text-right">
-            <div className="text-[10.5px] font-medium uppercase tracking-[.14em] text-faint">Starts in</div>
-            <div className="mt-1 text-[38px] font-semibold leading-none tracking-tight"><Countdown start={d.start} /></div>
-            <div className="mt-3 text-[12px] text-dim">Model favourite: <b className="text-ink">{p.top5[0].name}</b> at {pct(p.top5[0].p_win)} · {p.top5[1].code} {pct(p.top5[1].p_win)} · {p.top5[2].code} {pct(p.top5[2].p_win)}</div>
+            <div className="text-[12px] font-medium text-faint">Starts in</div>
+            <div className="mt-1 text-[38px] font-semibold leading-none"><Countdown start={d.start} /></div>
+            <div className="mt-3 text-[13px] text-dim">Model favourite: <b className="text-ink">{p.top5[0].name}</b> at {pct(p.top5[0].p_win)}, {p.top5[1].code} {pct(p.top5[1].p_win)}, {p.top5[2].code} {pct(p.top5[2].p_win)}</div>
           </div>
         </div>
       </section>
@@ -90,31 +90,31 @@ export default function NextRace() {
       {tab === "strategy" && (<div className="page-in space-y-5">
         <Panel title="Pre-race strategy lab" tags={["HISTORICAL", "ASSUMPTION"]} note="No car has turned a race lap yet, so every input is an estimate from earlier races or something you set here. Use it to compare plans under stated conditions, not as a forecast of the result. Each result lists exactly what it assumed.">
           <div className="grid gap-4 lg:grid-cols-3">
-            <div className="space-y-2.5 rounded-2xl border border-line bg-white/[0.03] p-4 text-xs">
-              <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-faint">Driver</div>
-              <select className="w-full" value={driver} onChange={(e) => setDriver(e.target.value)} aria-label="Driver">{p.drivers.map((x: any) => <option key={x.driver_id} value={x.driver_id}>{x.code} · {x.name}</option>)}</select>
+            <div className="space-y-2.5 rounded-2xl border border-line bg-white/[0.03] p-4 text-[13px]">
+              <div className="text-[12px] font-semibold text-faint">Driver</div>
+              <select className="w-full" value={driver} onChange={(e) => setDriver(e.target.value)} aria-label="Driver">{p.drivers.map((x: any) => <option key={x.driver_id} value={x.driver_id}>{x.code}, {x.name}</option>)}</select>
               <label className="flex items-center justify-between gap-2 text-dim">Start from grid slot<input type="number" className="w-20" min={1} max={22} placeholder="auto" value={grid ?? ""} onChange={(e) => setGrid(e.target.value ? Number(e.target.value) : undefined)} /></label>
               <label className="flex items-center justify-between gap-2 text-dim">Track temperature Δ°C<input type="number" className="w-20" min={-15} max={20} value={temp} onChange={(e) => setTemp(Number(e.target.value))} /></label>
             </div>
-            <div className="space-y-2.5 rounded-2xl border border-line bg-white/[0.03] p-4 text-xs">
-              <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.12em] text-faint"><input type="checkbox" checked={sc} onChange={(e) => setSc(e.target.checked)} />Safety Car</label>
+            <div className="space-y-2.5 rounded-2xl border border-line bg-white/[0.03] p-4 text-[13px]">
+              <label className="flex items-center gap-2 text-[12px] font-semibold text-faint"><input type="checkbox" checked={sc} onChange={(e) => setSc(e.target.checked)} />Safety Car</label>
               <div className={`flex flex-wrap items-center gap-2 text-dim ${sc ? "" : "opacity-40"}`}>on lap<input type="number" className="w-16" min={1} max={c.laps} value={scLap} disabled={!sc} onChange={(e) => setScLap(Number(e.target.value))} />
                 <select value={scType} disabled={!sc} onChange={(e) => setScType(e.target.value)}><option value="SC">Safety Car</option><option value="VSC">Virtual SC</option></select></div>
               <label className="flex items-center gap-2 text-dim"><input type="checkbox" checked={incidents} disabled={sc} onChange={(e) => setIncidents(e.target.checked)} />Random incidents at historical rates</label>
-              <div className="text-[11px] text-faint">Here: SC {(hz.sc_per_lap * 100).toFixed(1)}% per lap, VSC {(hz.vsc_per_lap * 100).toFixed(1)}% per lap.</div>
+              <div className="text-[12.5px] text-faint">Here: SC {(hz.sc_per_lap * 100).toFixed(1)}% per lap, VSC {(hz.vsc_per_lap * 100).toFixed(1)}% per lap.</div>
             </div>
-            <div className="space-y-2.5 rounded-2xl border border-line bg-white/[0.03] p-4 text-xs">
-              <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.12em] text-faint"><input type="checkbox" checked={rain} onChange={(e) => setRain(e.target.checked)} />Rain during the race</label>
+            <div className="space-y-2.5 rounded-2xl border border-line bg-white/[0.03] p-4 text-[13px]">
+              <label className="flex items-center gap-2 text-[12px] font-semibold text-faint"><input type="checkbox" checked={rain} onChange={(e) => setRain(e.target.checked)} />Rain during the race</label>
               <div className={`grid grid-cols-3 gap-2 text-faint ${rain ? "" : "opacity-40"}`}>
                 <label className="flex flex-col gap-1">Starts (min)<input type="number" min={0} value={rainIn} disabled={!rain} onChange={(e) => setRainIn(Number(e.target.value))} /></label>
                 <label className="flex flex-col gap-1">Intensity 0–1<input type="number" min={0} max={1} step={0.05} value={rainInt} disabled={!rain} onChange={(e) => setRainInt(Number(e.target.value))} /></label>
                 <label className="flex flex-col gap-1">For (min)<input type="number" min={1} value={rainDur} disabled={!rain} onChange={(e) => setRainDur(Number(e.target.value))} /></label>
               </div>
-              <div className="text-[11px] text-faint">Unticked: the forecast decides{fsum ? ` (currently ${fsum.maxProb}% max probability)` : ""}.</div>
+              <div className="text-[12.5px] text-faint">Unticked: the forecast decides{fsum ? ` (currently ${fsum.maxProb}% max probability)` : ""}.</div>
             </div>
           </div>
           <div className="mt-4 flex items-center gap-3"><button className="btn primary" onClick={run} disabled={busy || !driver} aria-busy={busy}>{busy ? "Simulating…" : "Compare strategies"}</button>
-            <span className="text-[11.5px] text-dim">Tests each starting tyre with one and two stops across 1,000 simulated races.</span></div>
+            <span className="text-[13px] text-dim">Tests each starting tyre with one and two stops across 1,000 simulated races.</span></div>
           {err && <div className="mt-3"><State error={err} /></div>}
         </Panel>
 
@@ -123,7 +123,7 @@ export default function NextRace() {
           <Panel title={`Plans for ${res.focus.code} from P${res.focus.grid}`} tags={["MODEL"]} pad={false} note={<>{res.n_sims} simulated races per plan{res.engine === "browser" ? ", run in your browser," : ""} with identical random futures; rivals run their own best plan (all starting on {String(res.field_start_compound).toLowerCase()}s). “Model Δ” is the tyre-and-pit arithmetic alone; “Sim Δ” adds traffic, incidents and weather. Expected finish averages over every simulation, including retirements.</>}>
             <div className="overflow-auto"><table className="grid-t"><thead><tr><th>Plan</th><th>Start</th><th>Stops</th><th className="r">Expected finish</th><th className="r">Range</th><th className="r">Win</th><th className="r">Podium</th><th className="r">Model Δ</th><th className="r">Sim Δ</th><th className="r">Laps in traffic</th></tr></thead>
               <tbody>{res.options.map((o: any) => <tr key={o.label} className={o.label === res.best ? "!bg-good/10" : ""}>
-                <td className="font-semibold">{o.stops}-stop{o.label === res.best && <span className="ml-2 rounded-full bg-good px-2 py-[1px] text-[9px] font-bold text-black">BEST</span>}</td><td><Tyre compound={o.start} /></td>
+                <td className="font-semibold">{o.stops}-stop{o.label === res.best && <span className="ml-2 rounded-full bg-good px-2 py-[1px] text-[11px] font-bold text-black">BEST</span>}</td><td><Tyre compound={o.start} /></td>
                 <td>{o.plan.map((x: any, i: number) => <span key={i} className="mr-2 inline-flex items-center gap-1"><span className="num">L{x.lap}</span><Tyre compound={x.compound} /></span>)}</td>
                 <td className="r num font-semibold">P{num(o.exp_pos)}</td><td className="r num text-dim">P{o.pos_p10}–P{o.pos_p90}</td><td className="r num">{pct(o.p_win)}</td><td className="r num">{pct(o.p_podium)}</td>
                 <td className="r num text-dim">{signed(o.model_delta)} s</td><td className="r num">{o.time_vs_best === null ? "—" : `${signed(o.time_vs_best)} s`}</td><td className="r num text-dim">{num(o.blocked_laps)}</td></tr>)}</tbody></table></div>
@@ -136,18 +136,18 @@ export default function NextRace() {
             </Panel>
           </div>
           <div className="glass rounded-2xl px-5 py-4">
-            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[.12em] text-faint">What this run assumed</div>
-            <ul className="space-y-1.5 text-[11.5px] text-dim">{res.notes.map((n: string, i: number) => <li key={i} className="flex gap-2"><span className="shrink-0"><Tag kind={tagOf(n)} /></span><span>{n.split(" · ").slice(1).join(" · ")}</span></li>)}</ul>
-            <div className="mt-2 text-[11.5px] text-dim">{res.caveat}</div>
+            <div className="mb-2 text-[12px] font-semibold text-faint">What this run assumed</div>
+            <ul className="space-y-1.5 text-[13px] text-dim">{res.notes.map((n: string, i: number) => <li key={i} className="flex gap-2"><span className="shrink-0"><Tag kind={tagOf(n)} /></span><span>{n.split(" · ").slice(1).join(" · ")}</span></li>)}</ul>
+            <div className="mt-2 text-[13px] text-dim">{res.caveat}</div>
           </div>
         </>)}
       </div>)}
 
       {tab === "weather" && (<div className="page-in space-y-5">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Stat label="Rain probability" tag="FORECAST" value={fsum ? `${fsum.maxProb}%` : "—"} sub={fc?.available ? `Max over the race window · ${num(fsum?.mm, 1)} mm` : "Forecast unavailable"} />
+          <Stat label="Rain probability" tag="FORECAST" value={fsum ? `${fsum.maxProb}%` : "—"} sub={fc?.available ? `Max over the race window, ${num(fsum?.mm, 1)} mm` : "Forecast unavailable"} />
           <Stat label="Air temperature" tag="FORECAST" value={fsum?.temp !== undefined && fsum?.temp !== null ? `${num(fsum.temp)}°C` : "—"} sub="Around mid-race" />
-          <Stat label="Races with a Safety Car" tag="HISTORICAL" value={hz.share_races_with_sc !== undefined ? pct(hz.share_races_with_sc, 0) : "—"} sub={`All stored races · VSC ${hz.share_races_with_vsc !== undefined ? pct(hz.share_races_with_vsc, 0) : "—"}`} />
+          <Stat label="Races with a Safety Car" tag="HISTORICAL" value={hz.share_races_with_sc !== undefined ? pct(hz.share_races_with_sc, 0) : "—"} sub={`All stored races, VSC ${hz.share_races_with_vsc !== undefined ? pct(hz.share_races_with_vsc, 0) : "—"}`} />
           <Stat label="Pit stop cost here" tag="HISTORICAL" value={`${d.tyre_prior.pit_loss} s`} sub={d.tyre_prior.source} />
         </div>
         <div className="grid gap-5 xl:grid-cols-2">

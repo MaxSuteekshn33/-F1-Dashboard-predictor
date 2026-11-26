@@ -68,7 +68,7 @@ export default function Lab() {
         note="Starting positions, gaps and tyres come from the recorded race at the chosen lap (change it with the lap control in the header). Everything you set here is a scenario assumption and is listed with the result.">
         <div className="grid gap-3 lg:grid-cols-2">
           {scns.map((s, i) => (
-            <div key={i} className="space-y-2.5 rounded-2xl border border-line bg-white/[0.03] p-4 text-xs">
+            <div key={i} className="space-y-2.5 rounded-2xl border border-line bg-white/[0.03] p-4 text-[13px]">
               <div className="flex items-center gap-2"><span className="num text-faint">{i + 1}</span><input type="text" className="flex-1 font-semibold" value={s.name} onChange={(e) => upd(i, { name: e.target.value })} aria-label="Scenario name" />
                 {scns.length > 1 && <button className="btn" onClick={() => setScns(scns.filter((_, k) => k !== i))} aria-label="Remove scenario">✕</button>}</div>
               <div className="flex flex-wrap items-center gap-2"><span className="w-16 text-faint">Strategy</span>
@@ -93,7 +93,7 @@ export default function Lab() {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button className="btn primary" onClick={run} disabled={busy || !r.sessionKey} aria-busy={busy}>{busy ? "Simulating…" : `Run ${scns.length} scenario${scns.length > 1 ? "s" : ""}`}</button>
           <button className="btn" disabled={scns.length >= 4} onClick={() => setScns([...scns, blank(`Scenario ${scns.length + 1}`)])}>+ Add scenario</button>
-          <label className="flex items-center gap-1.5 text-xs text-faint">Simulations each<select value={nSims} onChange={(e) => setNSims(Number(e.target.value))}>{[500, 1000, 2000, 5000].map((n) => <option key={n}>{n}</option>)}</select></label>
+          <label className="flex items-center gap-1.5 text-[13px] text-faint">Simulations each<select value={nSims} onChange={(e) => setNSims(Number(e.target.value))}>{[500, 1000, 2000, 5000].map((n) => <option key={n}>{n}</option>)}</select></label>
         </div>
         {err && <div className="mt-2"><State error={err} /></div>}
       </Panel>
@@ -104,19 +104,19 @@ export default function Lab() {
           <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
             {good.map((x: any) => (
               <div key={x.name} className={`glass rounded-2xl p-4 ${x.best ? "!border-good/50" : ""}`}>
-                <div className="flex items-center gap-2"><span className="text-sm font-semibold">{x.name}</span>{x.best && <span className="rounded bg-good px-1.5 py-[1px] text-[9px] font-bold text-black">BEST</span>}</div>
+                <div className="flex items-center gap-2"><span className="text-sm font-semibold">{x.name}</span>{x.best && <span className="rounded bg-good px-1.5 py-[1px] text-[11px] font-bold text-black">BEST</span>}</div>
                 <div className="num mt-2 grid grid-cols-3 gap-2 text-center" title="Expected finish averages over all simulations, including retirements">
-                  <div><div className="text-[10px] uppercase tracking-wider text-faint">Exp. finish</div><div className="text-xl font-semibold">P{num(x.exp_pos)}</div><div className="text-[10px] text-faint">P{x.pos_p10}–P{x.pos_p90}</div></div>
-                  <div><div className="text-[10px] uppercase tracking-wider text-faint">Win</div><div className="text-xl font-semibold">{pct(x.p_win)}</div><div className="text-[10px] text-faint">±{(x.p_win_se * 196).toFixed(1)} pts</div></div>
-                  <div><div className="text-[10px] uppercase tracking-wider text-faint">Podium</div><div className="text-xl font-semibold">{pct(x.p_podium)}</div><div className="text-[10px] text-faint">DNF {pct(x.p_dnf, 0)}</div></div>
+                  <div><div className="text-[12px]r text-faint">Exp. finish</div><div className="text-xl font-semibold">P{num(x.exp_pos)}</div><div className="text-[12px] text-faint">P{x.pos_p10}–P{x.pos_p90}</div></div>
+                  <div><div className="text-[12px]r text-faint">Win</div><div className="text-xl font-semibold">{pct(x.p_win)}</div><div className="text-[12px] text-faint">±{(x.p_win_se * 196).toFixed(1)} pts</div></div>
+                  <div><div className="text-[12px]r text-faint">Podium</div><div className="text-xl font-semibold">{pct(x.p_podium)}</div><div className="text-[12px] text-faint">DNF {pct(x.p_dnf, 0)}</div></div>
                 </div>
-                <div className="num mt-2 space-y-0.5 text-[11px] text-dim">
+                <div className="num mt-2 space-y-0.5 text-[12.5px] text-dim">
                   <div>Remaining race time: <b className="text-ink">{fmtDur(x.exp_race_time_remaining)}</b> <span className="text-faint">(P10–P90 {fmtDur(x.time_p10)} – {fmtDur(x.time_p90)})</span></div>
-                  <div>Time vs scenario 1: <b className="text-ink">{x.time_vs_first === null ? "n/a" : `${signed(x.time_vs_first)} s`}</b> · Strategy risk (position SD): <b className="text-ink">{x.risk_pos_sd}</b> · Traffic: {x.blocked_laps} laps</div>
+                  <div>Time vs scenario 1: <b className="text-ink">{x.time_vs_first === null ? "n/a" : `${signed(x.time_vs_first)} s`}</b>, Strategy risk (position SD): <b className="text-ink">{x.risk_pos_sd}</b>, Traffic: {x.blocked_laps} laps</div>
                   <div className="flex flex-wrap items-center gap-1">Stops: {x.plan.length ? x.plan.map((p: any, i: number) => <span key={i} className="inline-flex items-center gap-1">L{p.lap}<Tyre compound={p.compound} /></span>) : "none"}</div>
                   {!x.best && x.best_alternative && <div>Best alternative decision: <b className="text-ink">{x.best_alternative}</b></div>}
                 </div>
-                {x.assumptions.length > 0 && <ul className="mt-2 space-y-0.5 border-t border-line pt-2 text-[10.5px] text-faint">{x.assumptions.map((a: string, i: number) => <li key={i}><Tag kind="ASSUMPTION" /> {a}</li>)}</ul>}
+                {x.assumptions.length > 0 && <ul className="mt-2 space-y-0.5 border-t border-line pt-2 text-[12px] text-faint">{x.assumptions.map((a: string, i: number) => <li key={i}><Tag kind="ASSUMPTION" /> {a}</li>)}</ul>}
               </div>
             ))}
           </div>
@@ -163,18 +163,18 @@ function SafetyCar() {
       note={d.disclaimer}>
       <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-5">
         {[["Races with a Safety Car", hz.share_races_with_sc], ["Races with a VSC", hz.share_races_with_vsc], ["Races red-flagged", hz.share_races_red_flag]].map(([l, v]: any) =>
-          <div key={l} className="rounded-xl border border-line bg-panel2 px-3 py-2"><div className="text-[10px] uppercase tracking-wider text-faint">{l}</div><div className="num text-lg font-semibold">{v === undefined ? "—" : pct(v, 0)}</div></div>)}
-        <div className="rounded-xl border border-line bg-panel2 px-3 py-2"><div className="text-[10px] uppercase tracking-wider text-faint">SC chance per lap</div><div className="num text-lg font-semibold">{(hz.sc_per_lap * 100).toFixed(1)}%</div></div>
-        <div className="rounded-xl border border-line bg-panel2 px-3 py-2"><div className="text-[10px] uppercase tracking-wider text-faint">Stop cost green / SC / VSC</div><div className="num text-lg font-semibold">{d.pit_loss ? `${d.pit_loss.green} / ${d.pit_loss.sc} / ${d.pit_loss.vsc} s` : "—"}</div></div>
+          <div key={l} className="rounded-xl border border-line bg-panel2 px-3 py-2"><div className="text-[12px]r text-faint">{l}</div><div className="num text-lg font-semibold">{v === undefined ? "—" : pct(v, 0)}</div></div>)}
+        <div className="rounded-xl border border-line bg-panel2 px-3 py-2"><div className="text-[12px]r text-faint">SC chance per lap</div><div className="num text-lg font-semibold">{(hz.sc_per_lap * 100).toFixed(1)}%</div></div>
+        <div className="rounded-xl border border-line bg-panel2 px-3 py-2"><div className="text-[12px]r text-faint">Stop cost green / SC / VSC</div><div className="num text-lg font-semibold">{d.pit_loss ? `${d.pit_loss.green} / ${d.pit_loss.sc} / ${d.pit_loss.vsc} s` : "—"}</div></div>
       </div>
-      <div className="mb-2 text-[11px] text-faint">Base rates: {hz.source}.</div>
+      <div className="mb-2 text-[12.5px] text-faint">Base rates: {hz.source}.</div>
       {d.note ? <State empty={d.note} /> : (<>
         <div className="mb-3 grid gap-2 md:grid-cols-3">{Object.entries(d.verdicts || {}).map(([k, v]: any) => (
-          <div key={k} className="rounded-xl border border-line bg-panel2 px-3 py-2 text-xs"><div className="text-[10px] uppercase tracking-wider text-faint">{k === "sc" ? "Under Safety Car" : k === "vsc" ? "Under VSC" : "Under green"}</div>
+          <div key={k} className="rounded-xl border border-line bg-panel2 px-3 py-2 text-[13px]"><div className="text-[12px]r text-faint">{k === "sc" ? "Under Safety Car" : k === "vsc" ? "Under VSC" : "Under green"}</div>
             <div className="mt-0.5 text-sm font-semibold" style={{ color: v.better === "PIT" ? "#2fbf71" : "#f2f3f5" }}>{v.better}</div>
-            <div className="num text-dim">pitting changes expected finish by {signed(v.pit_minus_stay_positions, 2)} positions{k !== "green" && d.pit_loss ? ` · saves ${k === "sc" ? d.pit_loss.saved_sc : d.pit_loss.saved_vsc} s of pit loss` : ""}</div></div>))}</div>
+            <div className="num text-dim">pitting changes expected finish by {signed(v.pit_minus_stay_positions, 2)} positions{k !== "green" && d.pit_loss ? `, saves ${k === "sc" ? d.pit_loss.saved_sc : d.pit_loss.saved_vsc} s of pit loss` : ""}</div></div>))}</div>
         <OptionTable options={d.options || []} timeKey="time_vs_first" timeLabel="Time vs first row" />
-        <div className="mt-2 text-[11px] text-faint">Times are comparable only between rows with the same neutralisation. {d.pit_loss?.factor_note}</div>
+        <div className="mt-2 text-[12.5px] text-faint">Times are comparable only between rows with the same neutralisation. {d.pit_loss?.factor_note}</div>
       </>)}
       <div className="mt-3"><Notes title="Red flags, restarts, closures, retirements" items={Object.values(d.extras || {}) as string[]} /></div>
     </Panel>
